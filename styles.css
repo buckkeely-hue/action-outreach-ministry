@@ -438,8 +438,8 @@ body {
   font-size: 12px;
   color: rgba(255,255,255,0.4);
 }
-.footer-bottom a { color: rgba(255,255,255,0.4); text-decoration: none; }
-.footer-bottom a:hover { color: var(--gold); }
+.footer-bottom a { color: var(--gold); text-decoration: underline; }
+.footer-bottom a:hover { color: #fff; }
 
 /* ---- Modals ---- */
 .modal-overlay {
