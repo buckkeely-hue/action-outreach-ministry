@@ -615,19 +615,24 @@ body {
   flex-wrap: wrap;
 }
 .admin-tab {
-  background: var(--gold);
-  border: 1px solid var(--gold);
-  color: #1a1a2e;
-  padding: 6px 13px;
+  background: #4a3f00;
+  border: 2px solid #c8a400;
+  color: #f0c040;
+  padding: 7px 14px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: all 0.2s;
-  opacity: 0.5;
+  transition: all 0.15s;
 }
-.admin-tab.active, .admin-tab:hover {
-  opacity: 1;
+.admin-tab.active {
+  background: #c8a400;
+  border-color: #c8a400;
+  color: #1a1a2e;
+}
+.admin-tab:hover {
+  background: #7a6600;
+  color: #fff;
 }
 .admin-tab-body { }
 .admin-label {
