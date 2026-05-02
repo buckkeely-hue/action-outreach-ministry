@@ -615,20 +615,19 @@ body {
   flex-wrap: wrap;
 }
 .admin-tab {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.35);
-  color: rgba(255,255,255,0.9);
+  background: var(--gold);
+  border: 1px solid var(--gold);
+  color: #1a1a2e;
   padding: 6px 13px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 600;
   transition: all 0.2s;
+  opacity: 0.5;
 }
 .admin-tab.active, .admin-tab:hover {
-  background: var(--gold);
-  color: #1a1a2e;
-  border-color: var(--gold);
-  font-weight: 600;
+  opacity: 1;
 }
 .admin-tab-body { }
 .admin-label {
