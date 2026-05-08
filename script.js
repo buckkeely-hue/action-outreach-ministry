@@ -4,8 +4,10 @@ var SETTINGS = {
   ministryName: 'Action Outreach Ministry',
   phone: '(850) 000-0000',
   contactEmail: 'info@actionoutreachministry.com',
+  adminUsername: 'admin',
   adminPassword: 'ministry2024'
 };
+var ADMIN_RECOVERY_CODE = 'outreach2024reset';
 
 // ---- Content Defaults ----
 var CONTENT_DEFAULTS = {
@@ -265,8 +267,12 @@ function openAdmin() {
   document.getElementById('admin-overlay').style.display = 'flex';
   document.getElementById('admin-login-wrap').style.display = 'block';
   document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('admin-user').value = '';
   document.getElementById('admin-pw').value = '';
   document.getElementById('admin-pw-err').style.display = 'none';
+  document.getElementById('admin-reset-wrap').style.display = 'none';
+  document.getElementById('admin-reset-err').style.display = 'none';
+  document.getElementById('admin-reset-ok').style.display = 'none';
 }
 function closeAdmin() {
   document.getElementById('admin-overlay').style.display = 'none';
@@ -275,8 +281,9 @@ document.getElementById('admin-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeAdmin();
 });
 function checkAdminPw() {
+  var user = document.getElementById('admin-user').value.trim();
   var pw = document.getElementById('admin-pw').value;
-  if (pw === SETTINGS.adminPassword) {
+  if (user === SETTINGS.adminUsername && pw === SETTINGS.adminPassword) {
     document.getElementById('admin-login-wrap').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'block';
     adminTab('settings');
@@ -287,6 +294,31 @@ function checkAdminPw() {
 document.getElementById('admin-pw').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') checkAdminPw();
 });
+document.getElementById('admin-user').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('admin-pw').focus();
+});
+function toggleResetSection() {
+  var wrap = document.getElementById('admin-reset-wrap');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+}
+function doResetCredentials() {
+  var code = document.getElementById('admin-recovery-code').value.trim();
+  var newUser = document.getElementById('admin-reset-user').value.trim();
+  var newPw = document.getElementById('admin-reset-pw').value;
+  document.getElementById('admin-reset-err').style.display = 'none';
+  document.getElementById('admin-reset-ok').style.display = 'none';
+  if (code !== ADMIN_RECOVERY_CODE) {
+    document.getElementById('admin-reset-err').style.display = 'block';
+    return;
+  }
+  if (newUser) SETTINGS.adminUsername = newUser;
+  if (newPw) SETTINGS.adminPassword = newPw;
+  localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
+  document.getElementById('admin-reset-ok').style.display = 'block';
+  document.getElementById('admin-recovery-code').value = '';
+  document.getElementById('admin-reset-user').value = '';
+  document.getElementById('admin-reset-pw').value = '';
+}
 
 // ---- Admin Tabs ----
 function adminTab(name) {
@@ -311,20 +343,31 @@ function populateSettingsTab() {
   document.getElementById('admin-contact-email').value = SETTINGS.contactEmail || '';
   document.getElementById('admin-tagline').value = CONTENT.tagline || '';
   document.getElementById('admin-location').value = CONTENT.location || '';
+  document.getElementById('admin-new-user').value = '';
+  document.getElementById('admin-new-pw').value = '';
 }
 function saveAdminSettings() {
-  var newPw = document.getElementById('admin-new-pw').value;
   SETTINGS.paypalEmail = document.getElementById('admin-paypal-email').value.trim();
   SETTINGS.ministryName = document.getElementById('admin-ministry-name').value.trim() || 'Action Outreach Ministry';
   SETTINGS.phone = document.getElementById('admin-phone').value.trim();
   SETTINGS.contactEmail = document.getElementById('admin-contact-email').value.trim();
-  if (newPw) SETTINGS.adminPassword = newPw;
   CONTENT.tagline = document.getElementById('admin-tagline').value.trim();
   CONTENT.location = document.getElementById('admin-location').value.trim();
   localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
   localStorage.setItem('aom_content', JSON.stringify(CONTENT));
   applyContent();
   showSaveOk('admin-save-ok');
+}
+function saveAdminCredentials() {
+  var newUser = document.getElementById('admin-new-user').value.trim();
+  var newPw = document.getElementById('admin-new-pw').value;
+  if (!newUser && !newPw) return;
+  if (newUser) SETTINGS.adminUsername = newUser;
+  if (newPw) SETTINGS.adminPassword = newPw;
+  localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
+  document.getElementById('admin-new-user').value = '';
+  document.getElementById('admin-new-pw').value = '';
+  showSaveOk('admin-creds-ok');
 }
 
 // ---- Content Tab ----

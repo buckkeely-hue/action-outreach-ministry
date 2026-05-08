@@ -187,10 +187,23 @@
       <h2>Ministry Admin</h2>
 
       <div id="admin-login-wrap">
-        <p>Enter admin password to manage settings.</p>
-        <input type="password" id="admin-pw" placeholder="Admin password" class="custom-input">
+        <p>Enter your credentials to manage settings.</p>
+        <input type="text" id="admin-user" placeholder="Username" class="custom-input" autocomplete="username">
+        <input type="password" id="admin-pw" placeholder="Password" class="custom-input" style="margin-top:8px;" autocomplete="current-password">
         <button class="form-btn" onclick="checkAdminPw()" style="margin-top:10px;">Enter</button>
-        <div id="admin-pw-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;">Incorrect password.</div>
+        <div id="admin-pw-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;">Incorrect username or password.</div>
+        <div style="margin-top:10px;text-align:center;">
+          <a href="#" onclick="toggleResetSection();return false;" style="color:#86b4f0;font-size:13px;">Forgot credentials?</a>
+        </div>
+        <div id="admin-reset-wrap" style="display:none;margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
+          <p style="font-size:13px;color:#94a3b8;margin-bottom:8px;">Enter the recovery code to reset credentials.</p>
+          <input type="text" id="admin-recovery-code" placeholder="Recovery code" class="custom-input">
+          <input type="text" id="admin-reset-user" placeholder="New username" class="custom-input" style="margin-top:8px;">
+          <input type="password" id="admin-reset-pw" placeholder="New password" class="custom-input" style="margin-top:8px;">
+          <button class="form-btn" onclick="doResetCredentials()" style="margin-top:10px;">Reset Credentials</button>
+          <div id="admin-reset-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;">Invalid recovery code.</div>
+          <div id="admin-reset-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Credentials reset. You may now log in.</div>
+        </div>
       </div>
 
       <div id="admin-panel" style="display:none;">
@@ -216,10 +229,18 @@
           <input type="text" id="admin-phone" class="custom-input">
           <label class="admin-label" style="margin-top:10px;">Contact Email</label>
           <input type="email" id="admin-contact-email" class="custom-input">
-          <label class="admin-label" style="margin-top:10px;">Change Admin Password</label>
-          <input type="password" id="admin-new-pw" class="custom-input" placeholder="Leave blank to keep current">
           <button class="form-btn" onclick="saveAdminSettings()" style="margin-top:14px;">Save Settings</button>
           <div id="admin-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Settings saved.</div>
+
+          <div class="admin-credentials-card">
+            <div class="admin-credentials-title">🔐 Admin Credentials</div>
+            <label class="admin-label">New Username</label>
+            <input type="text" id="admin-new-user" class="custom-input" placeholder="Leave blank to keep current" autocomplete="new-password">
+            <label class="admin-label" style="margin-top:10px;">New Password</label>
+            <input type="password" id="admin-new-pw" class="custom-input" placeholder="Leave blank to keep current" autocomplete="new-password">
+            <button class="form-btn" onclick="saveAdminCredentials()" style="margin-top:12px;">Update Credentials</button>
+            <div id="admin-creds-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Credentials updated.</div>
+          </div>
         </div>
 
         <!-- Content Tab -->

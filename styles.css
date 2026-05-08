@@ -711,6 +711,20 @@ textarea.custom-input {
 .admin-date-row > div { flex: 1; }
 .admin-edit-actions { display: flex; gap: 8px; margin-top: 12px; }
 .admin-cancel-btn { background: rgba(255,255,255,0.08) !important; }
+.admin-credentials-card {
+  margin-top: 20px;
+  border: 1px solid rgba(134,180,240,0.25);
+  border-radius: 10px;
+  padding: 16px;
+  background: rgba(134,180,240,0.06);
+}
+.admin-credentials-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #86b4f0;
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 600px) {
