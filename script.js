@@ -58,6 +58,9 @@ var CONTENT = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
       currentAdminUser = {username: d.username, is_admin: d.is_admin};
     }
   }).catch(function() {});
+
+  var resetToken = new URLSearchParams(window.location.search).get('reset_token');
+  if (resetToken) { showResetConfirmModal(resetToken); }
 })();
 
 // ---- Helpers ----
@@ -338,6 +341,83 @@ function doResetCredentials() {
   });
 }
 
+// ---- Password Reset Confirm (from email link) ----
+var _pendingResetToken = null;
+function showResetConfirmModal(token) {
+  _pendingResetToken = token;
+  document.getElementById('reset-confirm-overlay').style.display = 'flex';
+  history.replaceState({}, '', window.location.pathname);
+}
+function submitResetConfirm() {
+  var pw  = document.getElementById('reset-new-pw').value;
+  var pw2 = document.getElementById('reset-new-pw2').value;
+  var errEl = document.getElementById('reset-confirm-err');
+  errEl.style.display = 'none';
+  if (!pw) { errEl.textContent = 'Enter a new password.'; errEl.style.display = 'block'; return; }
+  if (pw !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return; }
+  fetch('/api/auth/reset-confirm', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: _pendingResetToken, password: pw})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('reset-confirm-ok').style.display = 'block';
+      document.getElementById('reset-new-pw').value = '';
+      document.getElementById('reset-new-pw2').value = '';
+    } else {
+      errEl.textContent = d.error || 'Reset failed. Link may have expired.';
+      errEl.style.display = 'block';
+    }
+  });
+}
+
+// ---- SMTP Config ----
+function loadSmtpConfig() {
+  fetch('/api/admin/smtp-config').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) return;
+    document.getElementById('smtp-host').value      = d.host || '';
+    document.getElementById('smtp-port').value      = d.port || '587';
+    document.getElementById('smtp-user').value      = d.username || '';
+    document.getElementById('smtp-from-name').value = d.from_name || '';
+    document.getElementById('smtp-tls').value       = d.tls || 'starttls';
+    if (d.has_password) document.getElementById('smtp-pass').placeholder = '(saved)';
+  }).catch(function() {});
+}
+function saveSmtpConfig() {
+  var body = {
+    host:      document.getElementById('smtp-host').value.trim(),
+    port:      document.getElementById('smtp-port').value || '587',
+    username:  document.getElementById('smtp-user').value.trim(),
+    from_name: document.getElementById('smtp-from-name').value.trim(),
+    tls:       document.getElementById('smtp-tls').value,
+    password:  document.getElementById('smtp-pass').value
+  };
+  fetch('/api/admin/smtp-config', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('smtp-pass').value = '';
+      document.getElementById('smtp-pass').placeholder = '(saved)';
+      showSaveOk('smtp-save-ok');
+    }
+  });
+}
+function testSmtpEmail() {
+  var msgEl = document.getElementById('smtp-msg');
+  msgEl.style.display = 'none';
+  fetch('/api/admin/smtp-test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); }).then(function(d) {
+      msgEl.style.display = 'block';
+      if (d.ok) {
+        msgEl.style.color = '#86efac';
+        msgEl.textContent = 'Test email sent to ' + d.sent_to;
+      } else {
+        msgEl.style.color = '#f87171';
+        msgEl.textContent = d.error || 'Failed to send test email.';
+      }
+    });
+}
+
 // ---- Admin Tabs ----
 function adminTab(name) {
   document.querySelectorAll('.admin-tab').forEach(function(t) {
@@ -346,12 +426,19 @@ function adminTab(name) {
   document.querySelectorAll('.admin-tab-body').forEach(function(b) {
     b.style.display = b.id === 'admin-tab-' + name ? 'block' : 'none';
   });
-  if (name === 'settings') populateSettingsTab();
+  if (name === 'settings') { populateSettingsTab(); loadSmtpConfig(); loadUserCount(); }
   if (name === 'content') populateContentTab();
   if (name === 'testimonies') renderAdminTestimonies();
   if (name === 'events') renderAdminEvents();
   if (name === 'prayer') renderAdminPrayers();
   if (name === 'users') renderAdminUsers();
+}
+
+function loadUserCount() {
+  fetch('/api/admin/users').then(function(r) { return r.json(); }).then(function(users) {
+    var el = document.getElementById('settings-user-count');
+    if (el) el.textContent = users.length + ' user' + (users.length === 1 ? '' : 's') + ' registered';
+  }).catch(function() {});
 }
 
 // ---- Settings Tab ----

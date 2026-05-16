@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Action Outreach Ministry — standalone web server. No pip dependencies."""
 
-import hashlib, hmac, json, os, secrets, threading, time
+import hashlib, hmac, json, os, secrets, smtplib, threading, time
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -12,11 +14,15 @@ BASE_DIR  = Path(__file__).parent
 USERS_FILE    = BASE_DIR / 'ministry_users.json'
 SESSIONS_FILE = BASE_DIR / 'ministry_sessions.json'
 TXNS_FILE     = BASE_DIR / 'ministry_transactions.json'
+SMTP_FILE     = BASE_DIR / 'smtp_config.json'
 
 ADMIN_RECOVERY_CODE = 'outreach2024reset'
 
 SESSIONS      = {}
 SESSIONS_LOCK = threading.Lock()
+
+RESET_TOKENS      = {}   # token -> {username, expires}
+RESET_TOKENS_LOCK = threading.Lock()
 
 MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -46,10 +52,48 @@ def _save_json(path, data):
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
 
-def _load_users():    return _load_json(USERS_FILE, {})
-def _save_users(u):   _save_json(USERS_FILE, u)
-def _load_txns():     return _load_json(TXNS_FILE, [])
-def _save_txns(t):    _save_json(TXNS_FILE, t)
+def _load_users():     return _load_json(USERS_FILE, {})
+def _save_users(u):    _save_json(USERS_FILE, u)
+def _load_txns():      return _load_json(TXNS_FILE, [])
+def _save_txns(t):     _save_json(TXNS_FILE, t)
+def _load_smtp():      return _load_json(SMTP_FILE, {})
+def _save_smtp(cfg):   _save_json(SMTP_FILE, cfg)
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+
+def _send_email(smtp_cfg, to_addr, subject, body_text):
+    host      = smtp_cfg.get('host', '')
+    port      = int(smtp_cfg.get('port', 587))
+    user      = smtp_cfg.get('username', '')
+    password  = smtp_cfg.get('password', '')
+    from_name = smtp_cfg.get('from_name', 'Action Outreach Ministry')
+    tls_mode  = smtp_cfg.get('tls', 'starttls')
+    if not host or not user or not password:
+        raise ValueError('SMTP not configured')
+    msg = MIMEMultipart()
+    msg['From']    = f'{from_name} <{user}>'
+    msg['To']      = to_addr
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body_text, 'plain'))
+    if tls_mode == 'ssl':
+        with smtplib.SMTP_SSL(host, port) as s:
+            s.login(user, password)
+            s.send_message(msg)
+    else:
+        with smtplib.SMTP(host, port) as s:
+            s.ehlo()
+            s.starttls()
+            s.login(user, password)
+            s.send_message(msg)
+
+def _send_reset_email(smtp_cfg, to_addr, token, base_url):
+    link = f'{base_url}?reset_token={token}'
+    body = (
+        'You requested a password reset for your Action Outreach Ministry account.\n\n'
+        f'Click the link below to set a new password (expires in 1 hour):\n{link}\n\n'
+        'If you did not request this, you can ignore this email.'
+    )
+    _send_email(smtp_cfg, to_addr, 'Password Reset — Action Outreach Ministry', body)
 
 # ── Password ──────────────────────────────────────────────────────────────────
 
@@ -179,6 +223,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_admin_users()
         if path == '/api/admin/transactions':
             return self._api_admin_txns()
+        if path == '/api/admin/smtp-config':
+            return self._api_get_smtp()
 
         # Static file
         file_path = BASE_DIR / path.lstrip('/')
@@ -200,14 +246,18 @@ class AOMHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path.rstrip('/')
         routes = {
-            '/api/auth/login':           self._api_login,
-            '/api/auth/logout':          self._api_logout,
-            '/api/auth/reset':           self._api_reset,
-            '/api/admin/create-user':    self._api_create_user,
-            '/api/admin/delete-user':    self._api_delete_user,
-            '/api/admin/set-password':   self._api_set_password,
-            '/api/admin/toggle-admin':   self._api_toggle_admin,
-            '/api/donate/record':        self._api_donate_record,
+            '/api/auth/login':            self._api_login,
+            '/api/auth/logout':           self._api_logout,
+            '/api/auth/reset':            self._api_reset,
+            '/api/auth/request-reset':    self._api_request_reset,
+            '/api/auth/reset-confirm':    self._api_reset_confirm,
+            '/api/admin/create-user':     self._api_create_user,
+            '/api/admin/delete-user':     self._api_delete_user,
+            '/api/admin/set-password':    self._api_set_password,
+            '/api/admin/toggle-admin':    self._api_toggle_admin,
+            '/api/admin/smtp-config':     self._api_save_smtp,
+            '/api/admin/smtp-test':       self._api_test_smtp,
+            '/api/donate/record':         self._api_donate_record,
         }
         fn = routes.get(path)
         if fn:
@@ -360,6 +410,93 @@ class AOMHandler(BaseHTTPRequestHandler):
         if not self._require_admin():
             return
         self._json(_load_txns())
+
+    # ── SMTP config ───────────────────────────────────────────────────────────
+
+    def _api_get_smtp(self):
+        if not self._require_admin():
+            return
+        cfg = _load_smtp()
+        safe = {k: v for k, v in cfg.items() if k != 'password'}
+        safe['has_password'] = bool(cfg.get('password'))
+        self._json(safe)
+
+    def _api_save_smtp(self):
+        if not self._require_admin():
+            return
+        b = self._body()
+        cfg = _load_smtp()
+        for field in ('host', 'port', 'username', 'from_name', 'tls'):
+            if field in b:
+                cfg[field] = b[field]
+        if b.get('password'):
+            cfg['password'] = b['password']
+        _save_smtp(cfg)
+        self._json({'ok': True})
+
+    def _api_test_smtp(self):
+        admin = self._require_admin()
+        if not admin:
+            return
+        cfg = _load_smtp()
+        users = _load_users()
+        to_addr = users.get(admin, {}).get('contact_email') or cfg.get('username', '')
+        if not to_addr:
+            return self._err('No email address on file for your account')
+        try:
+            _send_email(cfg, to_addr, 'SMTP Test — Action Outreach Ministry',
+                        'Your SMTP settings are working correctly.')
+            self._json({'ok': True, 'sent_to': to_addr})
+        except Exception as e:
+            self._err(str(e), 500)
+
+    # ── Email-based password reset ────────────────────────────────────────────
+
+    def _api_request_reset(self):
+        b = self._body()
+        identifier = b.get('email', '').strip()
+        if not identifier:
+            return self._err('Email required')
+        users = _load_users()
+        found_key = next(
+            (k for k, u in users.items() if u.get('contact_email', '').lower() == identifier.lower()),
+            None
+        )
+        if not found_key:
+            return self._json({'ok': True})   # don't reveal whether email exists
+        cfg = _load_smtp()
+        token = secrets.token_urlsafe(32)
+        with RESET_TOKENS_LOCK:
+            RESET_TOKENS[token] = {'username': found_key, 'expires': time.time() + 3600}
+        host   = self.headers.get('Host', 'actionoutreachministry.com')
+        proto  = 'https' if self.headers.get('X-Forwarded-Proto') == 'https' else 'http'
+        try:
+            _send_reset_email(cfg, users[found_key]['contact_email'], token, f'{proto}://{host}')
+        except Exception as e:
+            return self._err(f'Email could not be sent: {e}', 500)
+        self._json({'ok': True})
+
+    def _api_reset_confirm(self):
+        b = self._body()
+        token  = b.get('token', '').strip()
+        new_pw = b.get('password', '')
+        if not token or not new_pw:
+            return self._err('Token and password required')
+        with RESET_TOKENS_LOCK:
+            entry = RESET_TOKENS.get(token)
+        if not entry or time.time() > entry['expires']:
+            return self._err('Reset link expired or invalid', 401)
+        users    = _load_users()
+        username = entry['username']
+        if username not in users:
+            return self._err('User not found', 404)
+        salt, h = _hash_pw(new_pw)
+        users[username]['salt'] = salt
+        users[username]['hash'] = h
+        _save_users(users)
+        with RESET_TOKENS_LOCK:
+            RESET_TOKENS.pop(token, None)
+        self._json({'ok': True})
 
     def _api_donate_record(self):
         b = self._body()

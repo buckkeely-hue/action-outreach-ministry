@@ -247,6 +247,60 @@
             <div id="admin-creds-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;">Passwords do not match.</div>
             <div id="admin-creds-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Password changed.</div>
           </div>
+
+          <div class="admin-credentials-card">
+            <div class="admin-credentials-title">👥 User Accounts</div>
+            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Create logins for staff and volunteers. Admins can manage all site content.</p>
+            <div id="settings-user-count" style="font-size:13px;color:#f0c040;margin-bottom:10px;"></div>
+            <button class="form-btn" onclick="adminTab('users')">Manage Users →</button>
+          </div>
+
+          <div class="admin-credentials-card">
+            <div class="admin-credentials-title">📧 Outgoing Email (SMTP)</div>
+            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Used for password reset emails. Use Gmail App Password or any SMTP provider.</p>
+            <label class="admin-label">SMTP Host</label>
+            <input type="text" id="smtp-host" class="custom-input" placeholder="smtp.gmail.com">
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <div style="flex:1;"><label class="admin-label">Port</label><input type="number" id="smtp-port" class="custom-input" placeholder="587"></div>
+              <div style="flex:2;"><label class="admin-label">Security</label>
+                <select id="smtp-tls" class="custom-input" style="height:38px;">
+                  <option value="starttls">STARTTLS (port 587)</option>
+                  <option value="ssl">SSL (port 465)</option>
+                </select>
+              </div>
+            </div>
+            <label class="admin-label" style="margin-top:8px;">Username / Email</label>
+            <input type="text" id="smtp-user" class="custom-input" placeholder="you@gmail.com">
+            <label class="admin-label" style="margin-top:8px;">Password / App Password</label>
+            <input type="password" id="smtp-pass" class="custom-input" autocomplete="new-password">
+            <label class="admin-label" style="margin-top:8px;">From Name</label>
+            <input type="text" id="smtp-from-name" class="custom-input" placeholder="Action Outreach Ministry">
+            <button class="form-btn" onclick="saveSmtpConfig()" style="margin-top:12px;">Save SMTP Settings</button>
+            <button class="form-btn" onclick="testSmtpEmail()" style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);">Send Test Email to Me</button>
+            <div id="smtp-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">SMTP settings saved.</div>
+            <div id="smtp-msg" style="display:none;margin-top:8px;font-size:13px;"></div>
+          </div>
+
+          <div class="admin-credentials-card">
+            <div class="admin-credentials-title">📬 Email Hosting (@actionoutreachministry.com)</div>
+            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Host professional email at your domain. Recommended options for nonprofits:</p>
+            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);">
+              <div style="color:#f0c040;font-size:13px;font-weight:600;">Google Workspace — Free for 501(c)(3)</div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Full Gmail, Drive, Meet &amp; Calendar. Apply at <span style="color:#86b4f0;">workspace.google.com/nonprofits</span></div>
+            </div>
+            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);">
+              <div style="color:#f0c040;font-size:13px;font-weight:600;">Zoho Mail — Free up to 5 users</div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Good for small teams. <span style="color:#86b4f0;">zoho.com/mail</span></div>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;">
+              <div style="color:#fff;font-weight:600;margin-bottom:4px;">DNS Records (add in Cloudflare after signup):</div>
+              <div style="font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;font-size:11px;line-height:1.8;">
+                MX &nbsp;· actionoutreachministry.com → provider's mail server<br>
+                TXT · v=spf1 include:[provider] ~all<br>
+                CNAME · DKIM key from your provider
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Content Tab -->
@@ -378,6 +432,19 @@
         </div>
 
       </div>
+    </div>
+  </div>
+
+  <!-- Password Reset Confirm Modal -->
+  <div id="reset-confirm-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:400px;">
+      <h2>Set New Password</h2>
+      <p class="modal-sub">Enter your new password below.</p>
+      <input type="password" id="reset-new-pw" class="custom-input" placeholder="New password" autocomplete="new-password">
+      <input type="password" id="reset-new-pw2" class="custom-input" placeholder="Confirm password" autocomplete="new-password" style="margin-top:8px;">
+      <button class="form-btn" onclick="submitResetConfirm()" style="margin-top:12px;">Set Password</button>
+      <div id="reset-confirm-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;"></div>
+      <div id="reset-confirm-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Password updated. You may now log in.</div>
     </div>
   </div>
 
