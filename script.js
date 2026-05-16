@@ -304,7 +304,19 @@ function checkAdminPw() {
     } else {
       document.getElementById('admin-pw-err').style.display = 'block';
     }
-  }).catch(function() { document.getElementById('admin-pw-err').style.display = 'block'; });
+  }).catch(function() {
+    // No backend (static hosting) — fall back to hardcoded credentials
+    if (user === 'admin' && pw === 'Ministrey2025') {
+      currentAdminUser = {username: 'admin', is_admin: true};
+      document.getElementById('admin-login-wrap').style.display = 'none';
+      document.getElementById('admin-panel').style.display = 'block';
+      var bar = document.getElementById('admin-logged-in-bar');
+      if (bar) bar.textContent = '✓ Logged in as admin';
+      adminTab('settings');
+    } else {
+      document.getElementById('admin-pw-err').style.display = 'block';
+    }
+  });
 }
 document.getElementById('admin-pw').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') checkAdminPw();
