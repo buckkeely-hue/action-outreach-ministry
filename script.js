@@ -4,10 +4,42 @@ var SETTINGS = {
   ministryName: 'Action Outreach Ministry',
   phone: '(850) 000-0000',
   contactEmail: 'info@actionoutreachministry.com',
-  adminUsername: 'admin',
-  adminPassword: 'ministry2024'
 };
 var ADMIN_RECOVERY_CODE = 'outreach2024reset';
+
+var AOM_USERS = [];
+var currentAdminUser = null;
+
+function aomHashSync(str) {
+  var h1 = 0x811c9dc5, h2 = 0xc4ceb9fe;
+  for (var i = 0; i < str.length; i++) {
+    var c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x9e3779b9);
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b);
+  }
+  h1 ^= h2; h2 ^= h1;
+  return (h1 >>> 0).toString(16).padStart(8,'0') + (h2 >>> 0).toString(16).padStart(8,'0');
+}
+
+function aomHash(password, callback) {
+  if (window.crypto && window.crypto.subtle) {
+    var enc = new TextEncoder();
+    crypto.subtle.digest('SHA-256', enc.encode(password)).then(function(buf) {
+      var arr = Array.from(new Uint8Array(buf));
+      callback(arr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join(''));
+    }).catch(function() { callback(aomHashSync(password)); });
+  } else {
+    callback(aomHashSync(password));
+  }
+}
+
+function loadAomUsers() {
+  try { AOM_USERS = JSON.parse(localStorage.getItem('aom_users') || '[]'); } catch(e) { AOM_USERS = []; }
+}
+
+function saveAomUsers() {
+  localStorage.setItem('aom_users', JSON.stringify(AOM_USERS));
+}
 
 // ---- Content Defaults ----
 var CONTENT_DEFAULTS = {
@@ -55,6 +87,13 @@ var CONTENT = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
   if (saved) { try { Object.assign(SETTINGS, JSON.parse(saved)); } catch(e) {} }
   var savedContent = localStorage.getItem('aom_content');
   if (savedContent) { try { Object.assign(CONTENT, JSON.parse(savedContent)); } catch(e) {} }
+  loadAomUsers();
+  if (!AOM_USERS.length) {
+    aomHash('ministry2024', function(hash) {
+      AOM_USERS = [{ username: 'admin', passwordHash: hash, isAdmin: true, contactEmail: '' }];
+      saveAomUsers();
+    });
+  }
 })();
 
 // ---- Helpers ----
@@ -283,13 +322,23 @@ document.getElementById('admin-overlay').addEventListener('click', function(e) {
 function checkAdminPw() {
   var user = document.getElementById('admin-user').value.trim();
   var pw = document.getElementById('admin-pw').value;
-  if (user === SETTINGS.adminUsername && pw === SETTINGS.adminPassword) {
-    document.getElementById('admin-login-wrap').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'block';
-    adminTab('settings');
-  } else {
-    document.getElementById('admin-pw-err').style.display = 'block';
-  }
+  loadAomUsers();
+  aomHash(pw, function(hash) {
+    var found = null;
+    for (var i = 0; i < AOM_USERS.length; i++) {
+      if (AOM_USERS[i].username.toLowerCase() === user.toLowerCase()) { found = AOM_USERS[i]; break; }
+    }
+    if (found && found.passwordHash === hash && found.isAdmin) {
+      currentAdminUser = found;
+      document.getElementById('admin-login-wrap').style.display = 'none';
+      document.getElementById('admin-panel').style.display = 'block';
+      var bar = document.getElementById('admin-logged-in-bar');
+      if (bar) bar.textContent = '✓ Logged in as ' + found.username + (found.contactEmail ? ' (' + found.contactEmail + ')' : '');
+      adminTab('settings');
+    } else {
+      document.getElementById('admin-pw-err').style.display = 'block';
+    }
+  });
 }
 document.getElementById('admin-pw').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') checkAdminPw();
@@ -311,10 +360,32 @@ function doResetCredentials() {
     document.getElementById('admin-reset-err').style.display = 'block';
     return;
   }
-  if (newUser) SETTINGS.adminUsername = newUser;
-  if (newPw) SETTINGS.adminPassword = newPw;
-  localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
-  document.getElementById('admin-reset-ok').style.display = 'block';
+  loadAomUsers();
+  var admin = AOM_USERS.filter(function(u) { return u.isAdmin; })[0];
+  if (!admin) {
+    if (!newUser || !newPw) {
+      document.getElementById('admin-reset-err').textContent = 'No users found — enter a new username and password.';
+      document.getElementById('admin-reset-err').style.display = 'block';
+      return;
+    }
+    aomHash(newPw, function(hash) {
+      AOM_USERS = [{ username: newUser, passwordHash: hash, isAdmin: true, contactEmail: '' }];
+      saveAomUsers();
+      document.getElementById('admin-reset-ok').style.display = 'block';
+    });
+  } else {
+    if (newUser) admin.username = newUser;
+    if (newPw) {
+      aomHash(newPw, function(hash) {
+        admin.passwordHash = hash;
+        saveAomUsers();
+        document.getElementById('admin-reset-ok').style.display = 'block';
+      });
+    } else {
+      if (newUser) saveAomUsers();
+      document.getElementById('admin-reset-ok').style.display = 'block';
+    }
+  }
   document.getElementById('admin-recovery-code').value = '';
   document.getElementById('admin-reset-user').value = '';
   document.getElementById('admin-reset-pw').value = '';
@@ -333,6 +404,7 @@ function adminTab(name) {
   if (name === 'testimonies') renderAdminTestimonies();
   if (name === 'events') renderAdminEvents();
   if (name === 'prayer') renderAdminPrayers();
+  if (name === 'users') renderAdminUsers();
 }
 
 // ---- Settings Tab ----
@@ -343,8 +415,8 @@ function populateSettingsTab() {
   document.getElementById('admin-contact-email').value = SETTINGS.contactEmail || '';
   document.getElementById('admin-tagline').value = CONTENT.tagline || '';
   document.getElementById('admin-location').value = CONTENT.location || '';
-  document.getElementById('admin-new-user').value = '';
   document.getElementById('admin-new-pw').value = '';
+  document.getElementById('admin-new-pw2').value = '';
 }
 function saveAdminSettings() {
   SETTINGS.paypalEmail = document.getElementById('admin-paypal-email').value.trim();
@@ -358,16 +430,22 @@ function saveAdminSettings() {
   applyContent();
   showSaveOk('admin-save-ok');
 }
-function saveAdminCredentials() {
-  var newUser = document.getElementById('admin-new-user').value.trim();
+function changeMyPassword() {
   var newPw = document.getElementById('admin-new-pw').value;
-  if (!newUser && !newPw) return;
-  if (newUser) SETTINGS.adminUsername = newUser;
-  if (newPw) SETTINGS.adminPassword = newPw;
-  localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
-  document.getElementById('admin-new-user').value = '';
-  document.getElementById('admin-new-pw').value = '';
-  showSaveOk('admin-creds-ok');
+  var newPw2 = document.getElementById('admin-new-pw2').value;
+  document.getElementById('admin-creds-err').style.display = 'none';
+  if (!newPw) return;
+  if (newPw !== newPw2) { document.getElementById('admin-creds-err').style.display = 'block'; return; }
+  aomHash(newPw, function(hash) {
+    loadAomUsers();
+    for (var i = 0; i < AOM_USERS.length; i++) {
+      if (AOM_USERS[i].username === currentAdminUser.username) { AOM_USERS[i].passwordHash = hash; break; }
+    }
+    saveAomUsers();
+    document.getElementById('admin-new-pw').value = '';
+    document.getElementById('admin-new-pw2').value = '';
+    showSaveOk('admin-creds-ok');
+  });
 }
 
 // ---- Content Tab ----
@@ -559,6 +637,86 @@ function deletePrayer(idx) {
   localStorage.setItem('aom_content', JSON.stringify(CONTENT));
   renderPrayers();
   renderAdminPrayers();
+}
+
+// ---- User Management ----
+function renderAdminUsers() {
+  var wrap = document.getElementById('admin-users-list');
+  loadAomUsers();
+  if (!AOM_USERS.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No users yet.</p>'; return; }
+  wrap.innerHTML = AOM_USERS.map(function(u, i) {
+    var isSelf = currentAdminUser && u.username === currentAdminUser.username;
+    return '<div class="admin-item">' +
+      '<div class="admin-item-preview"><strong>' + escHtml(u.username) + '</strong>' +
+      (u.isAdmin ? ' <span style="color:#fbbf24;font-size:11px;margin-left:4px;">ADMIN</span>' : '') +
+      (isSelf ? ' <span style="color:#94a3b8;font-size:11px;margin-left:4px;">(you)</span>' : '') +
+      (u.contactEmail ? '&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#94a3b8;font-size:12px;">' + escHtml(u.contactEmail) + '</span>' : '') +
+      '</div>' +
+      '<div class="admin-item-actions">' +
+      '<button class="admin-item-btn" onclick="promptSetUserPw(' + i + ')">Set Password</button>' +
+      (!isSelf ? '<button class="admin-item-btn" onclick="toggleAomAdmin(' + i + ')">' + (u.isAdmin ? 'Revoke Admin' : 'Make Admin') + '</button>' : '') +
+      (!isSelf ? '<button class="admin-item-btn del" onclick="deleteAomUser(' + i + ')">Delete</button>' : '') +
+      '</div>' +
+      '<div id="user-pw-row-' + i + '" style="display:none;margin-top:8px;display:none;">' +
+      '<input type="password" id="user-pw-input-' + i + '" class="custom-input" placeholder="New password" style="width:calc(100% - 80px);display:inline-block;vertical-align:middle;">' +
+      '<button class="admin-item-btn" style="margin-left:6px;vertical-align:middle;" onclick="saveUserPw(' + i + ')">Set</button>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function promptSetUserPw(idx) {
+  var row = document.getElementById('user-pw-row-' + idx);
+  row.style.display = row.style.display === 'none' ? 'block' : 'none';
+}
+
+function saveUserPw(idx) {
+  var pw = document.getElementById('user-pw-input-' + idx).value;
+  if (!pw) return;
+  aomHash(pw, function(hash) {
+    loadAomUsers();
+    AOM_USERS[idx].passwordHash = hash;
+    saveAomUsers();
+    renderAdminUsers();
+  });
+}
+
+function toggleAomAdmin(idx) {
+  loadAomUsers();
+  AOM_USERS[idx].isAdmin = !AOM_USERS[idx].isAdmin;
+  saveAomUsers();
+  renderAdminUsers();
+}
+
+function deleteAomUser(idx) {
+  loadAomUsers();
+  if (!confirm('Delete user "' + AOM_USERS[idx].username + '"?')) return;
+  AOM_USERS.splice(idx, 1);
+  saveAomUsers();
+  renderAdminUsers();
+}
+
+function createAomUser() {
+  var username = document.getElementById('new-user-name').value.trim();
+  var email = document.getElementById('new-user-email').value.trim();
+  var pw = document.getElementById('new-user-pw').value;
+  var isAdmin = document.getElementById('new-user-admin').checked;
+  var errEl = document.getElementById('new-user-err');
+  errEl.style.display = 'none';
+  if (!username || !pw) { errEl.textContent = 'Username and password are required.'; errEl.style.display = 'block'; return; }
+  loadAomUsers();
+  var exists = AOM_USERS.some(function(u) { return u.username.toLowerCase() === username.toLowerCase(); });
+  if (exists) { errEl.textContent = 'That username already exists.'; errEl.style.display = 'block'; return; }
+  aomHash(pw, function(hash) {
+    AOM_USERS.push({ username: username, passwordHash: hash, isAdmin: isAdmin, contactEmail: email });
+    saveAomUsers();
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-email').value = '';
+    document.getElementById('new-user-pw').value = '';
+    document.getElementById('new-user-admin').checked = false;
+    renderAdminUsers();
+    showSaveOk('new-user-ok');
+  });
 }
 
 // ---- Keyboard ----

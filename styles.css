@@ -78,6 +78,19 @@ body {
   transition: background 0.2s;
 }
 .donate-btn-header:hover { background: var(--gold-light); }
+.admin-link-header {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.admin-link-header:hover { color: #fff; border-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.15); }
 
 /* ---- Nav ---- */
 .site-nav {

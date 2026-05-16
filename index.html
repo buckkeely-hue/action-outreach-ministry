@@ -18,7 +18,10 @@
           <div class="logo-sub" id="site-tagline">Reaching the World for Christ</div>
         </div>
       </div>
-      <button class="donate-btn-header" onclick="openDonation()">Give Now</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="donate-btn-header" onclick="openDonation()">Give Now</button>
+        <button class="admin-link-header" onclick="openAdmin()">Admin</button>
+      </div>
     </div>
 
     <!-- Nav -->
@@ -207,12 +210,14 @@
       </div>
 
       <div id="admin-panel" style="display:none;">
+        <div id="admin-logged-in-bar" style="font-size:12px;color:#86efac;margin-bottom:10px;padding:6px 10px;background:rgba(134,239,172,0.08);border-radius:6px;border:1px solid rgba(134,239,172,0.2);"></div>
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="settings" onclick="adminTab('settings')">Settings</button>
           <button class="admin-tab" data-tab="content" onclick="adminTab('content')">Content</button>
           <button class="admin-tab" data-tab="testimonies" onclick="adminTab('testimonies')">Testimonies</button>
           <button class="admin-tab" data-tab="events" onclick="adminTab('events')">Events</button>
           <button class="admin-tab" data-tab="prayer" onclick="adminTab('prayer')">Prayer</button>
+          <button class="admin-tab" data-tab="users" onclick="adminTab('users')">Users</button>
         </div>
 
         <!-- Settings Tab -->
@@ -233,13 +238,14 @@
           <div id="admin-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Settings saved.</div>
 
           <div class="admin-credentials-card">
-            <div class="admin-credentials-title">🔐 Admin Credentials</div>
-            <label class="admin-label">New Username</label>
-            <input type="text" id="admin-new-user" class="custom-input" placeholder="Leave blank to keep current" autocomplete="new-password">
-            <label class="admin-label" style="margin-top:10px;">New Password</label>
-            <input type="password" id="admin-new-pw" class="custom-input" placeholder="Leave blank to keep current" autocomplete="new-password">
-            <button class="form-btn" onclick="saveAdminCredentials()" style="margin-top:12px;">Update Credentials</button>
-            <div id="admin-creds-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Credentials updated.</div>
+            <div class="admin-credentials-title">🔐 Change My Password</div>
+            <label class="admin-label">New Password</label>
+            <input type="password" id="admin-new-pw" class="custom-input" placeholder="New password" autocomplete="new-password">
+            <label class="admin-label" style="margin-top:10px;">Confirm Password</label>
+            <input type="password" id="admin-new-pw2" class="custom-input" placeholder="Confirm new password" autocomplete="new-password">
+            <button class="form-btn" onclick="changeMyPassword()" style="margin-top:12px;">Change Password</button>
+            <div id="admin-creds-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;">Passwords do not match.</div>
+            <div id="admin-creds-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Password changed.</div>
           </div>
         </div>
 
@@ -348,6 +354,26 @@
               <button class="form-btn" onclick="savePrayer()">Save</button>
               <button class="form-btn admin-cancel-btn" onclick="document.getElementById('admin-prayer-edit').style.display='none'">Cancel</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="admin-tab-users" class="admin-tab-body" style="display:none;">
+          <div id="admin-users-list"></div>
+          <div class="admin-credentials-card" style="margin-top:16px;">
+            <div class="admin-credentials-title">➕ Add New User</div>
+            <label class="admin-label">Username</label>
+            <input type="text" id="new-user-name" class="custom-input" placeholder="Username" autocomplete="off">
+            <label class="admin-label" style="margin-top:8px;">Contact Email (for recovery)</label>
+            <input type="email" id="new-user-email" class="custom-input" placeholder="email@example.com">
+            <label class="admin-label" style="margin-top:8px;">Password</label>
+            <input type="password" id="new-user-pw" class="custom-input" autocomplete="new-password">
+            <label class="checkbox-row" style="margin-top:10px;">
+              <input type="checkbox" id="new-user-admin"> Grant Admin Access
+            </label>
+            <button class="form-btn" onclick="createAomUser()" style="margin-top:12px;">Create User</button>
+            <div id="new-user-err" style="display:none;color:#f87171;margin-top:8px;font-size:13px;"></div>
+            <div id="new-user-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">User created.</div>
           </div>
         </div>
 
