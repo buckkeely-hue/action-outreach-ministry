@@ -42,7 +42,7 @@ certbot --nginx -d actionoutreachministry.com -d www.actionoutreachministry.com 
 echo ""
 echo "=== Setup complete! ==="
 echo "Site:       https://actionoutreachministry.com"
-echo "Admin:      https://actionoutreachministry.com  → Admin button → login: admin / ministry2024"
+echo "Admin:      https://actionoutreachministry.com  → Admin button → login: admin / Ministrey2025"
 echo "Service:    systemctl status aom"
 echo "Logs:       journalctl -u aom -f"
 echo "Update:     cd /var/www/action-outreach-ministry && git pull && systemctl restart aom"

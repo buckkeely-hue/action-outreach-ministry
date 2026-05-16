@@ -149,7 +149,7 @@ def _destroy_session(handler):
 def _seed_admin():
     users = _load_users()
     if not users:
-        salt, h = _hash_pw('ministry2024')
+        salt, h = _hash_pw('Ministrey2025')
         users['admin'] = {
             'salt': salt, 'hash': h, 'is_admin': True,
             'contact_email': '', 'created': int(time.time())
