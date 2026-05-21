@@ -317,6 +317,8 @@
 
           <div class="admin-credentials-card">
             <div class="admin-credentials-title">📧 Outgoing Email (SMTP)</div>
+            <button class="form-btn" onclick="testSmtpEmail()" style="margin-bottom:12px;background:#1d4ed8;border-color:#3b82f6;">📨 Send Test Email Now</button>
+            <div id="smtp-msg" style="display:none;margin-bottom:10px;font-size:13px;"></div>
             <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Used for password reset emails. Use Gmail App Password or any SMTP provider.</p>
             <label class="admin-label">SMTP Host</label>
             <input type="text" id="smtp-host" class="custom-input" placeholder="smtp.gmail.com">
@@ -336,9 +338,7 @@
             <label class="admin-label" style="margin-top:8px;">From Name</label>
             <input type="text" id="smtp-from-name" class="custom-input" placeholder="Action Outreach Ministry">
             <button class="form-btn" onclick="saveSmtpConfig()" style="margin-top:12px;">Save SMTP Settings</button>
-            <button class="form-btn" onclick="testSmtpEmail()" style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);">Send Test Email to Me</button>
             <div id="smtp-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">SMTP settings saved.</div>
-            <div id="smtp-msg" style="display:none;margin-top:8px;font-size:13px;"></div>
           </div>
 
           <div class="admin-credentials-card">
