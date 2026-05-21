@@ -487,10 +487,12 @@ function saveSmtpConfig() {
 }
 function testSmtpEmail() {
   var msgEl = document.getElementById('smtp-msg');
-  msgEl.style.display = 'none';
+  msgEl.style.display = 'block';
+  msgEl.style.color = '#f0c040';
+  msgEl.textContent = 'Sending…';
   fetch('/api/admin/smtp-test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' })
-    .then(function(r) { return r.json(); }).then(function(d) {
-      msgEl.style.display = 'block';
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
       if (d.ok) {
         msgEl.style.color = '#86efac';
         msgEl.textContent = 'Test email sent to ' + d.sent_to;
@@ -498,6 +500,10 @@ function testSmtpEmail() {
         msgEl.style.color = '#f87171';
         msgEl.textContent = d.error || 'Failed to send test email.';
       }
+    })
+    .catch(function(e) {
+      msgEl.style.color = '#f87171';
+      msgEl.textContent = 'Request failed: ' + e.message;
     });
 }
 
