@@ -11,10 +11,13 @@ from urllib.parse import urlparse
 PORT      = 8000
 BASE_DIR  = Path(__file__).parent
 
-USERS_FILE    = BASE_DIR / 'ministry_users.json'
-SESSIONS_FILE = BASE_DIR / 'ministry_sessions.json'
-TXNS_FILE     = BASE_DIR / 'ministry_transactions.json'
-SMTP_FILE     = BASE_DIR / 'smtp_config.json'
+USERS_FILE        = BASE_DIR / 'ministry_users.json'
+SESSIONS_FILE     = BASE_DIR / 'ministry_sessions.json'
+TXNS_FILE         = BASE_DIR / 'ministry_transactions.json'
+SMTP_FILE         = BASE_DIR / 'smtp_config.json'
+INFO_REQUESTS_FILE = BASE_DIR / 'info_requests.json'
+
+KASEY_EMAIL = 'kasey.carruthers@gmail.com'
 
 ADMIN_RECOVERY_CODE = 'outreach2024reset'
 
@@ -52,12 +55,14 @@ def _save_json(path, data):
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
 
-def _load_users():     return _load_json(USERS_FILE, {})
-def _save_users(u):    _save_json(USERS_FILE, u)
-def _load_txns():      return _load_json(TXNS_FILE, [])
-def _save_txns(t):     _save_json(TXNS_FILE, t)
-def _load_smtp():      return _load_json(SMTP_FILE, {})
-def _save_smtp(cfg):   _save_json(SMTP_FILE, cfg)
+def _load_users():        return _load_json(USERS_FILE, {})
+def _save_users(u):       _save_json(USERS_FILE, u)
+def _load_txns():         return _load_json(TXNS_FILE, [])
+def _save_txns(t):        _save_json(TXNS_FILE, t)
+def _load_smtp():         return _load_json(SMTP_FILE, {})
+def _save_smtp(cfg):      _save_json(SMTP_FILE, cfg)
+def _load_info_requests(): return _load_json(INFO_REQUESTS_FILE, [])
+def _save_info_requests(r): _save_json(INFO_REQUESTS_FILE, r)
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -225,6 +230,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_admin_txns()
         if path == '/api/admin/smtp-config':
             return self._api_get_smtp()
+        if path == '/api/admin/info-requests':
+            return self._api_admin_info_requests()
 
         # Static file
         file_path = BASE_DIR / path.lstrip('/')
@@ -258,6 +265,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/admin/smtp-config':     self._api_save_smtp,
             '/api/admin/smtp-test':       self._api_test_smtp,
             '/api/donate/record':         self._api_donate_record,
+            '/api/info-request':          self._api_info_request,
+            '/api/contact':               self._api_contact,
         }
         fn = routes.get(path)
         if fn:
@@ -497,6 +506,82 @@ class AOMHandler(BaseHTTPRequestHandler):
         with RESET_TOKENS_LOCK:
             RESET_TOKENS.pop(token, None)
         self._json({'ok': True})
+
+    def _api_contact(self):
+        b = self._body()
+        name    = b.get('name', '').strip()
+        email   = b.get('email', '').strip()
+        subject = b.get('subject', '').strip()
+        message = b.get('message', '').strip()
+        if not name or not email or not subject or not message:
+            return self._err('All fields are required')
+        body_text = (
+            f'New Contact Message — Action Outreach Ministry\n'
+            f'{"=" * 50}\n\n'
+            f'From:    {name} <{email}>\n'
+            f'Subject: {subject}\n\n'
+            f'Message:\n{message}\n\n'
+            f'Sent: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
+        )
+        try:
+            cfg = _load_smtp()
+            _send_email(cfg, KASEY_EMAIL, f'Contact: {subject} — from {name}', body_text)
+            self._json({'ok': True})
+        except Exception as e:
+            self._err(f'Message could not be sent: {e}', 500)
+
+    def _api_info_request(self):
+        b = self._body()
+        first    = b.get('first', '').strip()
+        last     = b.get('last', '').strip()
+        street   = b.get('street', '').strip()
+        city     = b.get('city', '').strip()
+        state    = b.get('state', '').strip()
+        zip_code = b.get('zip', '').strip()
+        email    = b.get('email', '').strip()
+        phone    = b.get('phone', '').strip()
+        interests = b.get('interests', [])
+        comments = b.get('comments', '').strip()
+        if not first or not last or not street or not city or not state or not zip_code:
+            return self._err('Name and mailing address are required')
+        entry = {
+            'id':        secrets.token_hex(6),
+            'timestamp': int(time.time()),
+            'name':      f'{first} {last}',
+            'address':   f'{street}, {city}, {state} {zip_code}',
+            'email':     email,
+            'phone':     phone,
+            'interests': interests,
+            'comments':  comments,
+        }
+        reqs = _load_info_requests()
+        reqs.insert(0, entry)
+        _save_info_requests(reqs)
+        # Email Kasey
+        interest_lines = '\n  '.join(interests) if interests else '(none specified)'
+        sep = '=' * 50
+        body_text = (
+            f'New Information Request — Action Outreach Ministry\n'
+            f'{sep}\n\n'
+            f'Name:    {entry["name"]}\n'
+            f'Address: {entry["address"]}\n'
+            f'Email:   {email or "(not provided)"}\n'
+            f'Phone:   {phone or "(not provided)"}\n\n'
+            f'Information Requested:\n  {interest_lines}\n\n'
+            f'Comments:\n  {comments or "(none)"}\n\n'
+            f'Submitted: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
+        )
+        try:
+            cfg = _load_smtp()
+            _send_email(cfg, KASEY_EMAIL, f'Info Request: {entry["name"]} — Action Outreach Ministry', body_text)
+        except Exception:
+            pass  # Save succeeded; email failure is non-fatal
+        self._json({'ok': True})
+
+    def _api_admin_info_requests(self):
+        if not self._require_admin():
+            return
+        self._json(_load_info_requests())
 
     def _api_donate_record(self):
         b = self._body()

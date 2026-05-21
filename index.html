@@ -30,6 +30,7 @@
       <button class="nav-tab" data-tab="testimonies">Testimonies</button>
       <button class="nav-tab" data-tab="events">Events</button>
       <button class="nav-tab" data-tab="prayer">Urgent Prayer</button>
+      <button class="nav-tab" data-tab="contact">Contact</button>
     </nav>
   </header>
 
@@ -51,6 +52,7 @@
         <p id="about-text-1">Founded on faith and fueled by love, Action Outreach Ministry has been serving the community for over two decades. We believe every person is made in the image of God and deserves to hear the Good News. Our volunteers, missionaries, and partners work tirelessly across local and international communities to bring transformation through the power of the Gospel.</p>
         <p id="about-text-2">Whether you join us in person, volunteer your time, or support us financially — you are a vital part of this mission. Together, we are the hands and feet of Jesus.</p>
       </div>
+
     </section>
 
     <!-- Testimonies -->
@@ -109,6 +111,62 @@
       </div>
     </section>
 
+    <!-- Contact -->
+    <section class="tab-section" id="tab-contact">
+      <div class="section-hero contact-hero">
+        <h1>Contact Action Outreach Ministry</h1>
+        <p>We'd love to hear from you. Send us a message and we'll get back to you as soon as possible.</p>
+      </div>
+
+      <div class="submit-form-wrap">
+        <h2>✉ Send Us a Message</h2>
+        <p>Fill out the form below and your message will be sent directly to our ministry team.</p>
+        <form class="submit-form" id="contact-form">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <input type="text" placeholder="Your Name *" id="cf-name" required style="margin:0;">
+            <input type="email" placeholder="Your Email *" id="cf-email" required style="margin:0;">
+          </div>
+          <input type="text" placeholder="Subject *" id="cf-subject" required>
+          <textarea placeholder="Your message…" id="cf-message" rows="6" required></textarea>
+          <button type="submit" class="form-btn">Send Message</button>
+        </form>
+        <div id="contact-thanks" style="display:none;" class="form-thanks">Thank you for reaching out! We'll be in touch with you soon. God bless you!</div>
+        <div id="contact-err" style="display:none;color:#f87171;margin-top:10px;font-size:13px;"></div>
+      </div>
+
+      <div class="submit-form-wrap" style="margin-top:0;">
+        <h2>📬 Request Information by Mail</h2>
+        <p>Want printed information about our ministry mailed to you? Fill out the form below.</p>
+        <form class="submit-form" id="info-request-form">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <input type="text" placeholder="First Name *" id="ir-first" required style="margin:0;">
+            <input type="text" placeholder="Last Name *" id="ir-last" required style="margin:0;">
+          </div>
+          <input type="text" placeholder="Street Address *" id="ir-street" required>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;">
+            <input type="text" placeholder="City *" id="ir-city" required style="margin:0;">
+            <input type="text" placeholder="State *" id="ir-state" maxlength="2" required style="margin:0;">
+            <input type="text" placeholder="ZIP *" id="ir-zip" maxlength="10" required style="margin:0;">
+          </div>
+          <input type="email" placeholder="Email (optional, for digital follow-up)" id="ir-email">
+          <input type="tel" placeholder="Phone (optional)" id="ir-phone">
+          <div class="ir-check-label">I'm interested in information about:</div>
+          <div class="ir-checkboxes">
+            <label class="checkbox-row"><input type="checkbox" id="ir-c1"> General Ministry Overview</label>
+            <label class="checkbox-row"><input type="checkbox" id="ir-c2"> Volunteer Opportunities</label>
+            <label class="checkbox-row"><input type="checkbox" id="ir-c3"> Mission Trips</label>
+            <label class="checkbox-row"><input type="checkbox" id="ir-c4"> Prayer Newsletter</label>
+            <label class="checkbox-row"><input type="checkbox" id="ir-c5"> How to Give / Support the Mission</label>
+            <label class="checkbox-row"><input type="checkbox" id="ir-c6"> Community Events</label>
+          </div>
+          <textarea placeholder="Additional comments or questions (optional)…" id="ir-comments" rows="3"></textarea>
+          <button type="submit" class="form-btn">Send My Request</button>
+        </form>
+        <div id="info-request-thanks" style="display:none;" class="form-thanks">Thank you! Your request has been received. We'll get information in the mail to you soon. God bless you!</div>
+        <div id="info-request-err" style="display:none;color:#f87171;margin-top:10px;font-size:13px;"></div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Footer -->
@@ -130,6 +188,7 @@
         <a href="#" onclick="switchTab('testimonies');return false;">Testimonies</a>
         <a href="#" onclick="switchTab('events');return false;">Events</a>
         <a href="#" onclick="switchTab('prayer');return false;">Prayer Requests</a>
+        <a href="#" onclick="switchTab('contact');return false;">Contact Us</a>
       </div>
       <div class="footer-col">
         <h4>Support the Mission</h4>
@@ -218,6 +277,7 @@
           <button class="admin-tab" data-tab="events" onclick="adminTab('events')">Events</button>
           <button class="admin-tab" data-tab="prayer" onclick="adminTab('prayer')">Prayer</button>
           <button class="admin-tab" data-tab="users" onclick="adminTab('users')">Users</button>
+          <button class="admin-tab" data-tab="inforequests" onclick="adminTab('inforequests')">📬 Info Requests</button>
         </div>
 
         <!-- Settings Tab -->
@@ -409,6 +469,12 @@
               <button class="form-btn admin-cancel-btn" onclick="document.getElementById('admin-prayer-edit').style.display='none'">Cancel</button>
             </div>
           </div>
+        </div>
+
+        <!-- Info Requests Tab -->
+        <div id="admin-tab-inforequests" class="admin-tab-body" style="display:none;">
+          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Mail-in information requests submitted by visitors. All requests are also emailed to Kasey Carruthers.</p>
+          <div id="admin-inforeq-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
         </div>
 
         <!-- Users Tab -->

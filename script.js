@@ -268,6 +268,77 @@ document.getElementById('prayer-form').addEventListener('submit', function(e) {
   document.getElementById('prayer-thanks').style.display = 'block';
 });
 
+// ---- Contact Form ----
+document.getElementById('contact-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var errEl = document.getElementById('contact-err');
+  errEl.style.display = 'none';
+  var payload = {
+    name:    document.getElementById('cf-name').value.trim(),
+    email:   document.getElementById('cf-email').value.trim(),
+    subject: document.getElementById('cf-subject').value.trim(),
+    message: document.getElementById('cf-message').value.trim(),
+  };
+  fetch('/api/contact', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('contact-form').style.display = 'none';
+      document.getElementById('contact-thanks').style.display = 'block';
+    } else {
+      errEl.textContent = d.error || 'Could not send message. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }).catch(function() {
+    errEl.textContent = 'Network error. Please check your connection and try again.';
+    errEl.style.display = 'block';
+  });
+});
+
+// ---- Info Request Form ----
+document.getElementById('info-request-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var errEl = document.getElementById('info-request-err');
+  errEl.style.display = 'none';
+  var interests = [];
+  if (document.getElementById('ir-c1').checked) interests.push('General Ministry Overview');
+  if (document.getElementById('ir-c2').checked) interests.push('Volunteer Opportunities');
+  if (document.getElementById('ir-c3').checked) interests.push('Mission Trips');
+  if (document.getElementById('ir-c4').checked) interests.push('Prayer Newsletter');
+  if (document.getElementById('ir-c5').checked) interests.push('How to Give / Support the Mission');
+  if (document.getElementById('ir-c6').checked) interests.push('Community Events');
+  var payload = {
+    first:     document.getElementById('ir-first').value.trim(),
+    last:      document.getElementById('ir-last').value.trim(),
+    street:    document.getElementById('ir-street').value.trim(),
+    city:      document.getElementById('ir-city').value.trim(),
+    state:     document.getElementById('ir-state').value.trim(),
+    zip:       document.getElementById('ir-zip').value.trim(),
+    email:     document.getElementById('ir-email').value.trim(),
+    phone:     document.getElementById('ir-phone').value.trim(),
+    interests: interests,
+    comments:  document.getElementById('ir-comments').value.trim(),
+  };
+  fetch('/api/info-request', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('info-request-form').style.display = 'none';
+      document.getElementById('info-request-thanks').style.display = 'block';
+    } else {
+      errEl.textContent = d.error || 'Submission failed. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }).catch(function() {
+    errEl.textContent = 'Network error. Please check your connection and try again.';
+    errEl.style.display = 'block';
+  });
+});
+
 // ---- Admin Modal ----
 function openAdmin() {
   document.getElementById('admin-overlay').style.display = 'flex';
@@ -444,6 +515,7 @@ function adminTab(name) {
   if (name === 'events') renderAdminEvents();
   if (name === 'prayer') renderAdminPrayers();
   if (name === 'users') renderAdminUsers();
+  if (name === 'inforequests') renderAdminInfoRequests();
 }
 
 function loadUserCount() {
@@ -774,6 +846,35 @@ function createAomUser() {
       errEl.textContent = d.error || 'Failed to create user.';
       errEl.style.display = 'block';
     }
+  });
+}
+
+// ---- Info Requests Admin ----
+function renderAdminInfoRequests() {
+  var wrap = document.getElementById('admin-inforeq-list');
+  wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
+  fetch('/api/admin/info-requests').then(function(r) { return r.json(); }).then(function(reqs) {
+    if (!Array.isArray(reqs) || !reqs.length) {
+      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No requests yet.</p>';
+      return;
+    }
+    wrap.innerHTML = reqs.map(function(r) {
+      var date = new Date(r.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      var interests = (r.interests && r.interests.length) ? r.interests.join(', ') : '—';
+      return '<div class="admin-item" style="flex-direction:column;align-items:flex-start;gap:4px;">' +
+        '<div style="display:flex;justify-content:space-between;width:100%;align-items:center;">' +
+          '<div class="admin-item-preview" style="font-weight:700;">' + escHtml(r.name) + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;">' + date + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#cbd5e1;">📍 ' + escHtml(r.address) + '</div>' +
+        (r.email ? '<div style="font-size:12px;color:#94a3b8;">✉ ' + escHtml(r.email) + '</div>' : '') +
+        (r.phone ? '<div style="font-size:12px;color:#94a3b8;">📞 ' + escHtml(r.phone) + '</div>' : '') +
+        '<div style="font-size:12px;color:#f0c040;margin-top:2px;">Interested in: ' + escHtml(interests) + '</div>' +
+        (r.comments ? '<div style="font-size:12px;color:#94a3b8;margin-top:2px;font-style:italic;">"' + escHtml(r.comments) + '"</div>' : '') +
+        '</div>';
+    }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load requests.</p>';
   });
 }
 

@@ -739,6 +739,28 @@ textarea.custom-input {
   letter-spacing: 0.02em;
 }
 
+/* ---- Contact Hero ---- */
+.contact-hero {
+  background: linear-gradient(135deg, #1a3a5c 0%, #0f2744 60%, #1a3a2c 100%);
+}
+
+/* ---- Info Request Form ---- */
+.ir-check-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.ir-checkboxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+@media (max-width: 600px) {
+  .ir-checkboxes { grid-template-columns: 1fr; }
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 600px) {
   .header-inner { padding: 10px 16px; }
