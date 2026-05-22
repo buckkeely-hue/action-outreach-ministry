@@ -85,11 +85,11 @@ def _send_email(smtp_cfg, to_addr, subject, body_text):
     msg['Subject'] = subject
     msg.attach(MIMEText(body_text, 'plain'))
     if tls_mode == 'ssl':
-        with smtplib.SMTP_SSL(host, port) as s:
+        with smtplib.SMTP_SSL(host, port, timeout=15) as s:
             s.login(user, password)
             s.send_message(msg)
     else:
-        with smtplib.SMTP(host, port) as s:
+        with smtplib.SMTP(host, port, timeout=15) as s:
             s.ehlo()
             s.starttls()
             s.login(user, password)
