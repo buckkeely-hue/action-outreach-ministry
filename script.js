@@ -463,16 +463,18 @@ function loadSmtpConfig() {
     document.getElementById('smtp-from-name').value = d.from_name || '';
     document.getElementById('smtp-tls').value       = d.tls || 'starttls';
     if (d.has_password) document.getElementById('smtp-pass').placeholder = '(saved)';
+    if (d.has_brevo_key) document.getElementById('smtp-brevo-key').placeholder = '(saved)';
   }).catch(function() {});
 }
 function saveSmtpConfig() {
   var body = {
-    host:      document.getElementById('smtp-host').value.trim(),
-    port:      document.getElementById('smtp-port').value || '587',
-    username:  document.getElementById('smtp-user').value.trim(),
-    from_name: document.getElementById('smtp-from-name').value.trim(),
-    tls:       document.getElementById('smtp-tls').value,
-    password:  document.getElementById('smtp-pass').value
+    host:          document.getElementById('smtp-host').value.trim(),
+    port:          document.getElementById('smtp-port').value || '587',
+    username:      document.getElementById('smtp-user').value.trim(),
+    from_name:     document.getElementById('smtp-from-name').value.trim(),
+    tls:           document.getElementById('smtp-tls').value,
+    password:      document.getElementById('smtp-pass').value,
+    brevo_api_key: document.getElementById('smtp-brevo-key').value.trim()
   };
   fetch('/api/admin/smtp-config', {
     method: 'POST', headers: {'Content-Type': 'application/json'},

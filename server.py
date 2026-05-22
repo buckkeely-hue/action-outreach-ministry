@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Action Outreach Ministry — standalone web server. No pip dependencies."""
 
-import hashlib, hmac, json, os, secrets, smtplib, threading, time
+import hashlib, hmac, json, os, secrets, smtplib, threading, time, urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -71,14 +71,33 @@ def _save_info_requests(r): _save_json(INFO_REQUESTS_FILE, r)
 # ── Email ─────────────────────────────────────────────────────────────────────
 
 def _send_email(smtp_cfg, to_addr, subject, body_text):
-    host      = smtp_cfg.get('host', '')
-    port      = int(smtp_cfg.get('port', 587))
-    user      = smtp_cfg.get('username', '')
-    password  = smtp_cfg.get('password', '')
-    from_name = smtp_cfg.get('from_name', 'Action Outreach Ministry')
-    tls_mode  = smtp_cfg.get('tls', 'starttls')
+    from_name  = smtp_cfg.get('from_name', 'Action Outreach Ministry')
+    from_email = smtp_cfg.get('username', '')
+    brevo_key  = smtp_cfg.get('brevo_api_key', '')
+    if brevo_key:
+        payload = json.dumps({
+            'sender': {'name': from_name, 'email': from_email or 'actionoutreachministry@gmail.com'},
+            'to': [{'email': to_addr}],
+            'subject': subject,
+            'textContent': body_text,
+        }).encode()
+        req = urllib.request.Request(
+            'https://api.brevo.com/v3/smtp/email',
+            data=payload,
+            headers={'Content-Type': 'application/json', 'api-key': brevo_key},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            if r.status >= 400:
+                raise RuntimeError(f'Brevo error {r.status}')
+        return
+    host     = smtp_cfg.get('host', '')
+    port     = int(smtp_cfg.get('port', 587))
+    user     = smtp_cfg.get('username', '')
+    password = smtp_cfg.get('password', '')
+    tls_mode = smtp_cfg.get('tls', 'starttls')
     if not host or not user or not password:
-        raise ValueError('SMTP not configured')
+        raise ValueError('Email not configured')
     msg = MIMEMultipart()
     msg['From']    = f'{from_name} <{user}>'
     msg['To']      = to_addr
@@ -433,8 +452,9 @@ class AOMHandler(BaseHTTPRequestHandler):
         if not self._require_admin():
             return
         cfg = _load_smtp()
-        safe = {k: v for k, v in cfg.items() if k != 'password'}
+        safe = {k: v for k, v in cfg.items() if k not in ('password', 'brevo_api_key')}
         safe['has_password'] = bool(cfg.get('password'))
+        safe['has_brevo_key'] = bool(cfg.get('brevo_api_key'))
         self._json(safe)
 
     def _api_save_smtp(self):
@@ -447,6 +467,8 @@ class AOMHandler(BaseHTTPRequestHandler):
                 cfg[field] = b[field]
         if b.get('password'):
             cfg['password'] = b['password']
+        if b.get('brevo_api_key'):
+            cfg['brevo_api_key'] = b['brevo_api_key']
         _save_smtp(cfg)
         self._json({'ok': True})
 
