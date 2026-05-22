@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """Action Outreach Ministry — standalone web server. No pip dependencies."""
 
-import hashlib, hmac, json, os, secrets, smtplib, threading, time, urllib.request
+import hashlib, hmac, json, os, secrets, smtplib, socket, threading, time, urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
+
+# Force IPv4 — VPS has no IPv6 routing
+_orig_getaddrinfo = socket.getaddrinfo
+def _getaddrinfo_ipv4(*args, **kwargs):
+    results = _orig_getaddrinfo(*args, **kwargs)
+    ipv4 = [r for r in results if r[0] == socket.AF_INET]
+    return ipv4 if ipv4 else results
+socket.getaddrinfo = _getaddrinfo_ipv4
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
