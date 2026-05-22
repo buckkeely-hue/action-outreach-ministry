@@ -522,9 +522,15 @@ class AOMHandler(BaseHTTPRequestHandler):
         message = b.get('message', '').strip()
         if not name or not email or not subject or not message:
             return self._err('All fields are required')
+        entry = {'name': name, 'email': email, 'subject': subject,
+                 'message': message, 'timestamp': int(time.time())}
+        contacts = _load_json(BASE_DIR / 'contacts.json', [])
+        contacts.append(entry)
+        _save_json(BASE_DIR / 'contacts.json', contacts)
+        sep = '=' * 50
         body_text = (
             f'New Contact Message — Action Outreach Ministry\n'
-            f'{"=" * 50}\n\n'
+            f'{sep}\n\n'
             f'From:    {name} <{email}>\n'
             f'Subject: {subject}\n\n'
             f'Message:\n{message}\n\n'
@@ -533,9 +539,9 @@ class AOMHandler(BaseHTTPRequestHandler):
         try:
             cfg = _load_smtp()
             _send_email(cfg, KASEY_EMAIL, f'Contact: {subject} — from {name}', body_text)
-            self._json({'ok': True})
-        except Exception as e:
-            self._err(f'Message could not be sent: {e}', 500)
+        except Exception:
+            pass
+        self._json({'ok': True})
 
     def _api_info_request(self):
         b = self._body()
