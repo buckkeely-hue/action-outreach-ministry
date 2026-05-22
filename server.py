@@ -5,6 +5,10 @@ import hashlib, hmac, json, os, secrets, smtplib, threading, time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -166,6 +170,9 @@ def _seed_admin():
 class AOMHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
+        pass
+
+    def handle_error(self, request, client_address):
         pass
 
     # ── Low-level response helpers ────────────────────────────────────────────
@@ -605,7 +612,7 @@ _load_sessions()
 _seed_admin()
 
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', PORT), AOMHandler)
+    server = ThreadedHTTPServer(('0.0.0.0', PORT), AOMHandler)
     print(f'Action Outreach Ministry server → http://0.0.0.0:{PORT}')
     try:
         server.serve_forever()
