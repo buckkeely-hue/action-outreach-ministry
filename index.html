@@ -19,6 +19,7 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
+        <button class="contact-info-btn-header" onclick="openContactInfo()">Contact Info</button>
         <button class="donate-btn-header" onclick="openDonation()">Give Now</button>
         <button class="admin-link-header" onclick="openAdmin()">Admin</button>
       </div>
@@ -74,6 +75,7 @@
           <button type="submit" class="form-btn">Submit Testimony</button>
         </form>
         <div id="testimony-thanks" style="display:none;" class="form-thanks">Thank you for sharing! Your testimony will be reviewed and posted.</div>
+        <div id="testimony-err" style="display:none;color:#b91c1c;margin-top:8px;font-size:13px;"></div>
       </div>
     </section>
 
@@ -108,6 +110,7 @@
           <button type="submit" class="form-btn">Submit Request</button>
         </form>
         <div id="prayer-thanks" style="display:none;" class="form-thanks">Your request has been submitted. Our prayer team will be interceding on your behalf.</div>
+        <div id="prayer-err" style="display:none;color:#b91c1c;margin-top:8px;font-size:13px;"></div>
       </div>
     </section>
 
@@ -181,6 +184,7 @@
         <p id="footer-location">📍 Pensacola, FL</p>
         <p id="footer-phone">📞 (850) 000-0000</p>
         <p id="footer-email">✉ info@actionoutreachministry.com</p>
+        <p id="footer-hours" style="display:none;"></p>
       </div>
       <div class="footer-col">
         <h4>Quick Links</h4>
@@ -199,6 +203,31 @@
     <div class="footer-bottom">© 2026 Action Outreach Ministry · All rights reserved · <a href="#" onclick="openAdmin();return false;">Admin</a></div>
   </footer>
 
+  <!-- Contact Info Modal -->
+  <div id="contact-info-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box contact-info-modal-box">
+      <button class="modal-close" onclick="closeContactInfo()">✕</button>
+      <div class="modal-logo">✝</div>
+      <h2 id="ci-ministry-name">Action Outreach Ministry</h2>
+      <p class="modal-sub" id="ci-tagline">Reaching the World for Christ</p>
+      <div class="ci-grid">
+        <div class="ci-row" id="ci-address-row">
+          <span class="ci-icon">📍</span><span id="ci-address">Pensacola, FL</span>
+        </div>
+        <div class="ci-row" id="ci-phone-row">
+          <span class="ci-icon">📞</span><span id="ci-phone">(850) 000-0000</span>
+        </div>
+        <div class="ci-row" id="ci-email-row">
+          <span class="ci-icon">✉</span><span id="ci-contact-email">info@actionoutreachministry.com</span>
+        </div>
+        <div class="ci-row" id="ci-hours-row" style="display:none;">
+          <span class="ci-icon">🕐</span><span id="ci-hours"></span>
+        </div>
+      </div>
+      <button class="form-btn" onclick="closeContactInfo();switchTab('contact');" style="width:100%;margin-top:20px;background:var(--gold);color:var(--navy);">Send Us a Message →</button>
+    </div>
+  </div>
+
   <!-- Donation Modal -->
   <div id="donation-overlay" class="modal-overlay" style="display:none;">
     <div class="modal-box" id="donation-modal">
@@ -207,38 +236,60 @@
       <h2>Give to Action Outreach Ministry</h2>
       <p class="modal-sub">Your generosity fuels the Gospel. 100% of donations support our mission.</p>
 
-      <div class="amount-grid" id="amount-grid">
-        <button class="amount-btn" data-amount="25">$25</button>
-        <button class="amount-btn" data-amount="50">$50</button>
-        <button class="amount-btn active" data-amount="100">$100</button>
-        <button class="amount-btn" data-amount="250">$250</button>
-        <button class="amount-btn" data-amount="500">$500</button>
-        <button class="amount-btn custom" id="custom-btn">Custom</button>
-      </div>
-      <div id="custom-input-wrap" style="display:none;">
-        <input type="number" id="custom-amount" placeholder="Enter amount" min="1" class="custom-input">
+      <!-- Payment Method Tabs -->
+      <div class="pm-tabs">
+        <button class="pm-tab active" id="pm-tab-paypal" onclick="setPayMethod('paypal')">PayPal</button>
+        <button class="pm-tab" id="pm-tab-cashapp" onclick="setPayMethod('cashapp')">CashApp</button>
+        <button class="pm-tab" id="pm-tab-venmo" onclick="setPayMethod('venmo')">Venmo</button>
+        <button class="pm-tab" id="pm-tab-zelle" onclick="setPayMethod('zelle')">Zelle</button>
       </div>
 
-      <div class="fund-select-wrap">
-        <label>Designate your gift (optional)</label>
-        <select id="fund-select">
-          <option value="general">General Fund — Where Needed Most</option>
-          <option value="missions">Global Missions</option>
-          <option value="food">Community Feeding Program</option>
-          <option value="bibles">Bible Distribution</option>
-          <option value="youth">Youth Ministry</option>
-        </select>
+      <!-- PayPal donation form -->
+      <div id="pm-paypal-content">
+        <div class="amount-grid" id="amount-grid">
+          <button class="amount-btn" data-amount="25">$25</button>
+          <button class="amount-btn" data-amount="50">$50</button>
+          <button class="amount-btn active" data-amount="100">$100</button>
+          <button class="amount-btn" data-amount="250">$250</button>
+          <button class="amount-btn" data-amount="500">$500</button>
+          <button class="amount-btn custom" id="custom-btn">Custom</button>
+        </div>
+        <div id="custom-input-wrap" style="display:none;">
+          <input type="number" id="custom-amount" placeholder="Enter amount" min="1" class="custom-input">
+        </div>
+
+        <div class="fund-select-wrap">
+          <label>Designate your gift (optional)</label>
+          <select id="fund-select">
+            <option value="general">General Fund — Where Needed Most</option>
+            <option value="missions">Global Missions</option>
+            <option value="food">Community Feeding Program</option>
+            <option value="bibles">Bible Distribution</option>
+            <option value="youth">Youth Ministry</option>
+          </select>
+        </div>
+
+        <div class="freq-row">
+          <button class="freq-btn active" id="freq-once" onclick="setFreq('once')">One-Time</button>
+          <button class="freq-btn" id="freq-monthly" onclick="setFreq('monthly')">Monthly</button>
+        </div>
+
+        <button class="give-btn" id="give-btn" onclick="processDonation()">Give $100 Now</button>
+        <div class="secure-note">🔒 Secure giving powered by PayPal · Tax deductible</div>
+        <div id="donation-error" class="donation-error" style="display:none;"></div>
       </div>
 
-      <div class="freq-row">
-        <button class="freq-btn active" id="freq-once" onclick="setFreq('once')">One-Time</button>
-        <button class="freq-btn" id="freq-monthly" onclick="setFreq('monthly')">Monthly</button>
+      <!-- QR Code content (CashApp / Venmo / Zelle) -->
+      <div id="pm-qr-content" style="display:none;">
+        <div class="qr-wrap">
+          <img id="qr-img" src="" alt="QR Code" class="qr-img">
+          <div class="qr-handle" id="qr-handle"></div>
+          <div class="qr-instructions" id="qr-instructions"></div>
+        </div>
+        <div id="qr-not-configured" style="display:none;" class="qr-not-configured">
+          This payment method has not been configured yet. Please contact us directly or use PayPal.
+        </div>
       </div>
-
-      <button class="give-btn" id="give-btn" onclick="processDonation()">Give $100 Now</button>
-
-      <div class="secure-note">🔒 Secure giving powered by PayPal · Tax deductible</div>
-      <div id="donation-error" class="donation-error" style="display:none;"></div>
     </div>
   </div>
 
@@ -276,24 +327,41 @@
           <button class="admin-tab" data-tab="testimonies" onclick="adminTab('testimonies')">Testimonies</button>
           <button class="admin-tab" data-tab="events" onclick="adminTab('events')">Events</button>
           <button class="admin-tab" data-tab="prayer" onclick="adminTab('prayer')">Prayer</button>
-          <button class="admin-tab" data-tab="users" onclick="adminTab('users')">Users</button>
+          <button class="admin-tab" data-tab="contacts" onclick="adminTab('contacts')">Contacts</button>
+          <button class="admin-tab" data-tab="donations" onclick="adminTab('donations')">Donations</button>
           <button class="admin-tab" data-tab="inforequests" onclick="adminTab('inforequests')">📬 Info Requests</button>
+          <button class="admin-tab" data-tab="users" onclick="adminTab('users')">Users</button>
         </div>
 
         <!-- Settings Tab -->
         <div id="admin-tab-settings" class="admin-tab-body">
-          <label class="admin-label">PayPal Email (receives donations)</label>
-          <input type="email" id="admin-paypal-email" class="custom-input" placeholder="yourchurch@email.com">
-          <label class="admin-label" style="margin-top:10px;">Ministry Name</label>
+          <label class="admin-label">Ministry Name</label>
           <input type="text" id="admin-ministry-name" class="custom-input">
           <label class="admin-label" style="margin-top:10px;">Tagline</label>
           <input type="text" id="admin-tagline" class="custom-input" placeholder="Reaching the World for Christ">
-          <label class="admin-label" style="margin-top:10px;">Location</label>
+          <label class="admin-label" style="margin-top:10px;">Location (city, state)</label>
           <input type="text" id="admin-location" class="custom-input" placeholder="Pensacola, FL">
+          <label class="admin-label" style="margin-top:10px;">Full Address</label>
+          <input type="text" id="admin-address" class="custom-input" placeholder="123 Church St, Pensacola FL 32501">
           <label class="admin-label" style="margin-top:10px;">Contact Phone</label>
           <input type="text" id="admin-phone" class="custom-input">
-          <label class="admin-label" style="margin-top:10px;">Contact Email</label>
+          <label class="admin-label" style="margin-top:10px;">Public Contact Email</label>
           <input type="email" id="admin-contact-email" class="custom-input">
+          <label class="admin-label" style="margin-top:10px;">Office Hours</label>
+          <input type="text" id="admin-hours" class="custom-input" placeholder="Mon–Fri 9am–5pm">
+          <label class="admin-label" style="margin-top:10px;">Notification Email <span style="color:#f0c040;font-size:11px;">(receives contact forms, submissions)</span></label>
+          <input type="email" id="admin-notify-email" class="custom-input" placeholder="admin@yourministry.com">
+
+          <div class="admin-section-head">💳 Payment Handles</div>
+          <label class="admin-label">PayPal Email (receives donations)</label>
+          <input type="email" id="admin-paypal-email" class="custom-input" placeholder="yourchurch@email.com">
+          <label class="admin-label" style="margin-top:10px;">CashApp Handle</label>
+          <input type="text" id="admin-cashapp" class="custom-input" placeholder="$YourHandle">
+          <label class="admin-label" style="margin-top:10px;">Venmo Handle</label>
+          <input type="text" id="admin-venmo" class="custom-input" placeholder="YourHandle">
+          <label class="admin-label" style="margin-top:10px;">Zelle (phone number or email)</label>
+          <input type="text" id="admin-zelle" class="custom-input" placeholder="(850) 555-1234">
+
           <button class="form-btn" onclick="saveAdminSettings()" style="margin-top:14px;">Save Settings</button>
           <div id="admin-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Settings saved.</div>
 
@@ -309,17 +377,10 @@
           </div>
 
           <div class="admin-credentials-card">
-            <div class="admin-credentials-title">👥 User Accounts</div>
-            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Create logins for staff and volunteers. Admins can manage all site content.</p>
-            <div id="settings-user-count" style="font-size:13px;color:#f0c040;margin-bottom:10px;"></div>
-            <button class="form-btn" onclick="adminTab('users')">Manage Users →</button>
-          </div>
-
-          <div class="admin-credentials-card">
             <div class="admin-credentials-title">📧 Outgoing Email (SMTP)</div>
             <button class="form-btn" onclick="testSmtpEmail()" style="margin-bottom:12px;background:#1d4ed8;border-color:#3b82f6;">📨 Send Test Email Now</button>
             <div id="smtp-msg" style="display:none;margin-bottom:10px;font-size:13px;"></div>
-            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Used for password reset emails. Use Gmail App Password or any SMTP provider.</p>
+            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Used for contact forms and password reset emails. Gmail App Password or any SMTP provider.</p>
             <label class="admin-label">SMTP Host</label>
             <input type="text" id="smtp-host" class="custom-input" placeholder="smtp.gmail.com">
             <div style="display:flex;gap:8px;margin-top:8px;">
@@ -344,24 +405,10 @@
           </div>
 
           <div class="admin-credentials-card">
-            <div class="admin-credentials-title">📬 Email Hosting (@actionoutreachministry.com)</div>
-            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Host professional email at your domain. Recommended options for nonprofits:</p>
-            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);">
-              <div style="color:#f0c040;font-size:13px;font-weight:600;">Google Workspace — Free for 501(c)(3)</div>
-              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Full Gmail, Drive, Meet &amp; Calendar. Apply at <span style="color:#86b4f0;">workspace.google.com/nonprofits</span></div>
-            </div>
-            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);">
-              <div style="color:#f0c040;font-size:13px;font-weight:600;">Zoho Mail — Free up to 5 users</div>
-              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">Good for small teams. <span style="color:#86b4f0;">zoho.com/mail</span></div>
-            </div>
-            <div style="font-size:12px;color:#94a3b8;">
-              <div style="color:#fff;font-weight:600;margin-bottom:4px;">DNS Records (add in Cloudflare after signup):</div>
-              <div style="font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;font-size:11px;line-height:1.8;">
-                MX &nbsp;· actionoutreachministry.com → provider's mail server<br>
-                TXT · v=spf1 include:[provider] ~all<br>
-                CNAME · DKIM key from your provider
-              </div>
-            </div>
+            <div class="admin-credentials-title">👥 User Accounts</div>
+            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Create logins for staff and volunteers. Admins can manage all site content.</p>
+            <div id="settings-user-count" style="font-size:13px;color:#f0c040;margin-bottom:10px;"></div>
+            <button class="form-btn" onclick="adminTab('users')">Manage Users →</button>
           </div>
         </div>
 
@@ -415,6 +462,9 @@
 
         <!-- Testimonies Tab -->
         <div id="admin-tab-testimonies" class="admin-tab-body" style="display:none;">
+          <div class="admin-section-head" style="color:#f0c040;">⏳ Pending Review</div>
+          <div id="admin-pending-testimonies"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
+          <div class="admin-section-head" style="margin-top:16px;">✓ Published</div>
           <div id="admin-testimonies-list"></div>
           <button class="form-btn" onclick="newTestimony()" style="margin-top:12px;">+ Add Testimony</button>
           <div id="admin-testimony-edit" style="display:none;margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
@@ -455,6 +505,9 @@
 
         <!-- Prayer Tab -->
         <div id="admin-tab-prayer" class="admin-tab-body" style="display:none;">
+          <div class="admin-section-head" style="color:#f0c040;">⏳ Pending Review</div>
+          <div id="admin-pending-prayers"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
+          <div class="admin-section-head" style="margin-top:16px;">✓ Published</div>
           <div id="admin-prayers-list"></div>
           <button class="form-btn" onclick="newPrayer()" style="margin-top:12px;">+ Add Prayer Request</button>
           <div id="admin-prayer-edit" style="display:none;margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
@@ -473,9 +526,21 @@
           </div>
         </div>
 
+        <!-- Contacts Tab -->
+        <div id="admin-tab-contacts" class="admin-tab-body" style="display:none;">
+          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Contact form submissions from site visitors.</p>
+          <div id="admin-contacts-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
+        </div>
+
+        <!-- Donations Tab -->
+        <div id="admin-tab-donations" class="admin-tab-body" style="display:none;">
+          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Recorded donation intents (PayPal redirects logged here).</p>
+          <div id="admin-donations-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
+        </div>
+
         <!-- Info Requests Tab -->
         <div id="admin-tab-inforequests" class="admin-tab-body" style="display:none;">
-          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Mail-in information requests submitted by visitors. All requests are also emailed to Kasey Carruthers.</p>
+          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Mail-in information requests submitted by visitors. All requests are also emailed to the configured notification address.</p>
           <div id="admin-inforeq-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
         </div>
 

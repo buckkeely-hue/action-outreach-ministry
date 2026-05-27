@@ -1,0 +1,110 @@
+{
+  "settings": {
+    "ministryName": "Action Outreach Ministry",
+    "tagline": "Reaching the World for Christ",
+    "location": "Pensacola, FL",
+    "address": "",
+    "phone": "(850) 000-0000",
+    "contactEmail": "info@actionoutreachministry.com",
+    "hours": "",
+    "notifyEmail": "",
+    "paypalEmail": "",
+    "cashapp": "",
+    "venmo": "",
+    "zelle": ""
+  },
+  "outreachHeroTitle": "Reaching Hearts, Changing Lives",
+  "outreachHeroText": "Action Outreach Ministry is committed to spreading the Gospel of Jesus Christ through compassionate service, community outreach, and discipleship.",
+  "aboutTitle": "About Our Ministry",
+  "aboutText1": "Founded on faith and fueled by love, Action Outreach Ministry has been serving the community for over two decades. We believe every person is made in the image of God and deserves to hear the Good News. Our volunteers, missionaries, and partners work tirelessly across local and international communities to bring transformation through the power of the Gospel.",
+  "aboutText2": "Whether you join us in person, volunteer your time, or support us financially \u2014 you are a vital part of this mission. Together, we are the hands and feet of Jesus.",
+  "cards": [
+    {
+      "icon": "\ud83c\udf0d",
+      "title": "Global Missions",
+      "text": "We partner with missionaries worldwide to bring hope, healing, and the message of salvation to unreached communities."
+    },
+    {
+      "icon": "\ud83c\udf5e",
+      "title": "Community Feeding",
+      "text": "Our weekly food pantry serves hundreds of families, meeting physical needs while sharing the love of Christ."
+    },
+    {
+      "icon": "\ud83d\udcd6",
+      "title": "Bible Distribution",
+      "text": "We distribute Bibles and discipleship materials to prisons, shelters, and underserved communities locally and abroad."
+    },
+    {
+      "icon": "\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67",
+      "title": "Family Restoration",
+      "text": "Through counseling, support groups, and prayer, we help families find healing and walk in God's purpose."
+    }
+  ],
+  "testimoniesHeroTitle": "Stories of Transformation",
+  "testimoniesHeroText": "God is moving. Read how lives are being changed through prayer, outreach, and the power of the Gospel.",
+  "testimonies": [
+    {
+      "quote": "I was homeless and without hope. Action Outreach found me, fed me, and shared Jesus with me. Today I have a home, a family, and a faith that never wavers.",
+      "author": "\u2014 Marcus T., Pensacola FL"
+    },
+    {
+      "quote": "Through the prayer ministry, my marriage was completely restored. We were on the verge of divorce and God showed up in a miraculous way.",
+      "author": "\u2014 Sandra & James W."
+    },
+    {
+      "quote": "The Bible they gave me in prison changed my life. I got out, found this ministry, and now I volunteer every week to give back what was given to me.",
+      "author": "\u2014 David R."
+    }
+  ],
+  "eventsHeroTitle": "Upcoming Events",
+  "eventsHeroText": "Join us as we gather for worship, outreach, and fellowship. All are welcome.",
+  "events": [
+    {
+      "month": "MAY",
+      "day": "18",
+      "title": "Community Prayer Walk",
+      "meta": "9:00 AM \u00b7 Downtown Pensacola \u00b7 Free",
+      "text": "Join us as we walk through the community, praying over businesses, schools, and families. Wear comfortable shoes and bring a heart for the city."
+    },
+    {
+      "month": "MAY",
+      "day": "25",
+      "title": "Food Pantry & Gospel Outreach",
+      "meta": "10:00 AM \u2013 2:00 PM \u00b7 Ministry Center \u00b7 Free",
+      "text": "Hundreds of families will receive groceries and hear the Gospel. Volunteers needed \u2014 sign up at the contact form below."
+    },
+    {
+      "month": "JUN",
+      "day": "7",
+      "title": "Revival Night",
+      "meta": "6:00 PM \u00b7 Main Sanctuary \u00b7 Free",
+      "text": "A night of worship, testimonies, and the Word. Come expectant \u2014 God moves powerfully when His people gather."
+    },
+    {
+      "month": "JUN",
+      "day": "21",
+      "title": "Youth Summer Kickoff",
+      "meta": "11:00 AM \u00b7 Ministry Grounds \u00b7 Free",
+      "text": "Games, food, and a powerful message for our youth. Bring the whole family."
+    }
+  ],
+  "prayerHeroTitle": "Urgent Prayer Requests",
+  "prayerHeroText": "We believe in the power of prayer. Submit your request and our prayer team will stand in agreement with you.",
+  "prayers": [
+    {
+      "urgent": true,
+      "text": "Please pray for our missionary team in Haiti who are currently in a dangerous region. Pray for their safety, provision, and boldness.",
+      "meta": "Submitted by Ministry Team \u00b7 May 1, 2026"
+    },
+    {
+      "urgent": true,
+      "text": "Pray for Brother James who is in ICU following emergency surgery. His family needs strength and God's healing touch.",
+      "meta": "Submitted by Family \u00b7 May 2, 2026"
+    },
+    {
+      "urgent": false,
+      "text": "Pray for our upcoming mission trip to Guatemala \u2014 finances, visas, and spiritual preparation for the entire team.",
+      "meta": "Submitted by Missions Dept. \u00b7 Apr 28, 2026"
+    }
+  ]
+}

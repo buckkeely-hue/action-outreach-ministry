@@ -1,26 +1,34 @@
-// ---- Settings ----
-var SETTINGS = {
-  paypalEmail: '',
-  ministryName: 'Action Outreach Ministry',
-  phone: '(850) 000-0000',
-  contactEmail: 'info@actionoutreachministry.com',
-};
+// ---- State ----
+var CONTENT = {};
 var currentAdminUser = null;
+var _contentLoaded = false;
 
-// ---- Content Defaults ----
+// ---- Content defaults (used until server responds) ----
 var CONTENT_DEFAULTS = {
-  tagline: 'Reaching the World for Christ',
-  location: 'Pensacola, FL',
+  settings: {
+    ministryName: 'Action Outreach Ministry',
+    tagline: 'Reaching the World for Christ',
+    location: 'Pensacola, FL',
+    address: '',
+    phone: '(850) 000-0000',
+    contactEmail: 'info@actionoutreachministry.com',
+    hours: '',
+    notifyEmail: '',
+    paypalEmail: '',
+    cashapp: '',
+    venmo: '',
+    zelle: '',
+  },
   outreachHeroTitle: 'Reaching Hearts, Changing Lives',
   outreachHeroText: 'Action Outreach Ministry is committed to spreading the Gospel of Jesus Christ through compassionate service, community outreach, and discipleship.',
   aboutTitle: 'About Our Ministry',
-  aboutText1: 'Founded on faith and fueled by love, Action Outreach Ministry has been serving the community for over two decades. We believe every person is made in the image of God and deserves to hear the Good News. Our volunteers, missionaries, and partners work tirelessly across local and international communities to bring transformation through the power of the Gospel.',
-  aboutText2: 'Whether you join us in person, volunteer your time, or support us financially — you are a vital part of this mission. Together, we are the hands and feet of Jesus.',
+  aboutText1: 'Founded on faith and fueled by love, Action Outreach Ministry has been serving the community for over two decades.',
+  aboutText2: 'Whether you join us in person, volunteer your time, or support us financially — you are a vital part of this mission.',
   cards: [
     { icon: '🌍', title: 'Global Missions', text: 'We partner with missionaries worldwide to bring hope, healing, and the message of salvation to unreached communities.' },
     { icon: '🍞', title: 'Community Feeding', text: 'Our weekly food pantry serves hundreds of families, meeting physical needs while sharing the love of Christ.' },
     { icon: '📖', title: 'Bible Distribution', text: 'We distribute Bibles and discipleship materials to prisons, shelters, and underserved communities locally and abroad.' },
-    { icon: '👨‍👩‍👧', title: 'Family Restoration', text: 'Through counseling, support groups, and prayer, we help families find healing and walk in God\'s purpose.' }
+    { icon: '👨‍👩‍👧', title: 'Family Restoration', text: "Through counseling, support groups, and prayer, we help families find healing and walk in God's purpose." }
   ],
   testimoniesHeroTitle: 'Stories of Transformation',
   testimoniesHeroText: 'God is moving. Read how lives are being changed through prayer, outreach, and the power of the Gospel.',
@@ -32,33 +40,47 @@ var CONTENT_DEFAULTS = {
   eventsHeroTitle: 'Upcoming Events',
   eventsHeroText: 'Join us as we gather for worship, outreach, and fellowship. All are welcome.',
   events: [
-    { month: 'MAY', day: '18', title: 'Community Prayer Walk', meta: '9:00 AM · Downtown Pensacola · Free', text: 'Join us as we walk through the community, praying over businesses, schools, and families. Wear comfortable shoes and bring a heart for the city.' },
-    { month: 'MAY', day: '25', title: 'Food Pantry & Gospel Outreach', meta: '10:00 AM – 2:00 PM · Ministry Center · Free', text: 'Hundreds of families will receive groceries and hear the Gospel. Volunteers needed — sign up at the contact form below.' },
-    { month: 'JUN', day: '7', title: 'Revival Night', meta: '6:00 PM · Main Sanctuary · Free', text: 'A night of worship, testimonies, and the Word. Come expectant — God moves powerfully when His people gather.' },
+    { month: 'MAY', day: '18', title: 'Community Prayer Walk', meta: '9:00 AM · Downtown Pensacola · Free', text: 'Join us as we walk through the community, praying over businesses, schools, and families.' },
+    { month: 'MAY', day: '25', title: 'Food Pantry & Gospel Outreach', meta: '10:00 AM – 2:00 PM · Ministry Center · Free', text: 'Hundreds of families will receive groceries and hear the Gospel.' },
+    { month: 'JUN', day: '7',  title: 'Revival Night', meta: '6:00 PM · Main Sanctuary · Free', text: 'A night of worship, testimonies, and the Word. Come expectant — God moves powerfully when His people gather.' },
     { month: 'JUN', day: '21', title: 'Youth Summer Kickoff', meta: '11:00 AM · Ministry Grounds · Free', text: 'Games, food, and a powerful message for our youth. Bring the whole family.' }
   ],
   prayerHeroTitle: 'Urgent Prayer Requests',
   prayerHeroText: 'We believe in the power of prayer. Submit your request and our prayer team will stand in agreement with you.',
   prayers: [
-    { urgent: true, text: 'Please pray for our missionary team in Haiti who are currently in a dangerous region. Pray for their safety, provision, and boldness.', meta: 'Submitted by Ministry Team · May 1, 2026' },
-    { urgent: true, text: 'Pray for Brother James who is in ICU following emergency surgery. His family needs strength and God\'s healing touch.', meta: 'Submitted by Family · May 2, 2026' },
+    { urgent: true,  text: 'Please pray for our missionary team in Haiti who are currently in a dangerous region. Pray for their safety, provision, and boldness.', meta: 'Submitted by Ministry Team · May 1, 2026' },
+    { urgent: true,  text: "Pray for Brother James who is in ICU following emergency surgery. His family needs strength and God's healing touch.", meta: 'Submitted by Family · May 2, 2026' },
     { urgent: false, text: 'Pray for our upcoming mission trip to Guatemala — finances, visas, and spiritual preparation for the entire team.', meta: 'Submitted by Missions Dept. · Apr 28, 2026' }
   ]
 };
 
-var CONTENT = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
-
+// ---- Init ----
 (function init() {
-  var saved = localStorage.getItem('aom_settings');
-  if (saved) { try { Object.assign(SETTINGS, JSON.parse(saved)); } catch(e) {} }
-  var savedContent = localStorage.getItem('aom_content');
-  if (savedContent) { try { Object.assign(CONTENT, JSON.parse(savedContent)); } catch(e) {} }
-  fetch('/api/auth/status').then(function(r) { return r.json(); }).then(function(d) {
-    if (d.authenticated && d.is_admin) {
-      currentAdminUser = {username: d.username, is_admin: d.is_admin};
-    }
-  }).catch(function() {});
+  // Apply defaults immediately so page renders without flash
+  CONTENT = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
+  applyContent();
 
+  // Load live content from server
+  fetch('/api/content')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      CONTENT = d;
+      _contentLoaded = true;
+      applyContent();
+    })
+    .catch(function() { _contentLoaded = true; });
+
+  // Check auth
+  fetch('/api/auth/status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.authenticated && d.is_admin) {
+        currentAdminUser = { username: d.username, is_admin: d.is_admin };
+      }
+    })
+    .catch(function() {});
+
+  // Password reset link
   var resetToken = new URLSearchParams(window.location.search).get('reset_token');
   if (resetToken) { showResetConfirmModal(resetToken); }
 })();
@@ -77,39 +99,56 @@ function showSaveOk(id) {
   var el = document.getElementById(id);
   if (!el) return;
   el.style.display = 'block';
-  setTimeout(function() { el.style.display = 'none'; }, 2000);
+  setTimeout(function() { el.style.display = 'none'; }, 2500);
+}
+
+function s(key) {
+  return (CONTENT.settings || CONTENT_DEFAULTS.settings)[key] || CONTENT_DEFAULTS.settings[key] || '';
 }
 
 // ---- Render Content ----
 function applyContent() {
-  setEl('site-name-header', SETTINGS.ministryName);
-  setEl('site-tagline', CONTENT.tagline);
+  var name = s('ministryName') || 'Action Outreach Ministry';
+  setEl('site-name-header', name);
+  setEl('site-tagline', s('tagline'));
   var fn = document.getElementById('site-name-footer');
-  if (fn) fn.innerHTML = '&#10011; ' + escHtml(SETTINGS.ministryName);
-  setEl('footer-location', '📍 ' + CONTENT.location);
-  setEl('footer-phone', '📞 ' + SETTINGS.phone);
-  setEl('footer-email', '✉ ' + SETTINGS.contactEmail);
-  setEl('outreach-hero-title', CONTENT.outreachHeroTitle);
-  setEl('outreach-hero-text', CONTENT.outreachHeroText);
-  setEl('about-title', CONTENT.aboutTitle);
-  setEl('about-text-1', CONTENT.aboutText1);
-  setEl('about-text-2', CONTENT.aboutText2);
+  if (fn) fn.innerHTML = '&#10011; ' + escHtml(name);
+  var loc = s('location');
+  var addr = s('address');
+  setEl('footer-location', '📍 ' + (addr || loc));
+  setEl('footer-phone', '📞 ' + s('phone'));
+  setEl('footer-email', '✉ ' + s('contactEmail'));
+  var hoursEl = document.getElementById('footer-hours');
+  if (hoursEl) {
+    if (s('hours')) { hoursEl.textContent = '🕐 ' + s('hours'); hoursEl.style.display = ''; }
+    else { hoursEl.style.display = 'none'; }
+  }
+
+  setEl('outreach-hero-title', CONTENT.outreachHeroTitle || '');
+  setEl('outreach-hero-text', CONTENT.outreachHeroText || '');
+  setEl('about-title', CONTENT.aboutTitle || '');
+  setEl('about-text-1', CONTENT.aboutText1 || '');
+  setEl('about-text-2', CONTENT.aboutText2 || '');
   renderCards();
-  setEl('testimonies-hero-title', CONTENT.testimoniesHeroTitle);
-  setEl('testimonies-hero-text', CONTENT.testimoniesHeroText);
+  setEl('testimonies-hero-title', CONTENT.testimoniesHeroTitle || '');
+  setEl('testimonies-hero-text', CONTENT.testimoniesHeroText || '');
   renderTestimonies();
-  setEl('events-hero-title', CONTENT.eventsHeroTitle);
-  setEl('events-hero-text', CONTENT.eventsHeroText);
+  setEl('events-hero-title', CONTENT.eventsHeroTitle || '');
+  setEl('events-hero-text', CONTENT.eventsHeroText || '');
   renderEvents();
-  setEl('prayer-hero-title', CONTENT.prayerHeroTitle);
-  setEl('prayer-hero-text', CONTENT.prayerHeroText);
+  setEl('prayer-hero-title', CONTENT.prayerHeroTitle || '');
+  setEl('prayer-hero-text', CONTENT.prayerHeroText || '');
   renderPrayers();
+
+  // Update page title
+  document.title = name;
 }
 
 function renderCards() {
   var grid = document.getElementById('cards-grid');
   if (!grid) return;
-  grid.innerHTML = CONTENT.cards.map(function(c) {
+  var cards = CONTENT.cards || [];
+  grid.innerHTML = cards.map(function(c) {
     return '<div class="info-card"><div class="card-icon">' + c.icon + '</div><h3>' + escHtml(c.title) + '</h3><p>' + escHtml(c.text) + '</p></div>';
   }).join('');
 }
@@ -117,7 +156,8 @@ function renderCards() {
 function renderTestimonies() {
   var list = document.getElementById('testimony-list');
   if (!list) return;
-  list.innerHTML = CONTENT.testimonies.map(function(t) {
+  var testimonies = CONTENT.testimonies || [];
+  list.innerHTML = testimonies.map(function(t) {
     return '<div class="testimony-card"><div class="testimony-quote">"' + escHtml(t.quote) + '"</div><div class="testimony-author">' + escHtml(t.author) + '</div></div>';
   }).join('');
 }
@@ -125,7 +165,8 @@ function renderTestimonies() {
 function renderEvents() {
   var list = document.getElementById('events-list');
   if (!list) return;
-  list.innerHTML = CONTENT.events.map(function(e) {
+  var events = CONTENT.events || [];
+  list.innerHTML = events.map(function(e) {
     return '<div class="event-card">' +
       '<div class="event-date-box"><span class="event-month">' + escHtml(e.month) + '</span><span class="event-day">' + escHtml(e.day) + '</span></div>' +
       '<div class="event-info"><h3>' + escHtml(e.title) + '</h3><p class="event-meta">' + escHtml(e.meta) + '</p><p>' + escHtml(e.text) + '</p></div>' +
@@ -136,7 +177,8 @@ function renderEvents() {
 function renderPrayers() {
   var list = document.getElementById('prayer-list');
   if (!list) return;
-  list.innerHTML = CONTENT.prayers.map(function(p) {
+  var prayers = CONTENT.prayers || [];
+  list.innerHTML = prayers.map(function(p) {
     return '<div class="prayer-card' + (p.urgent ? ' urgent' : '') + '">' +
       (p.urgent ? '<div class="prayer-badge">URGENT</div>' : '') +
       '<div class="prayer-text">' + escHtml(p.text) + '</div>' +
@@ -161,13 +203,40 @@ document.querySelectorAll('.nav-tab').forEach(function(btn) {
   btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
 });
 
+// ---- Contact Info Modal ----
+function openContactInfo() {
+  var name = s('ministryName') || 'Action Outreach Ministry';
+  var addr = s('address') || s('location');
+  setEl('ci-ministry-name', name);
+  setEl('ci-tagline', s('tagline'));
+  setEl('ci-address', addr);
+  setEl('ci-phone', s('phone'));
+  setEl('ci-contact-email', s('contactEmail'));
+  var hoursRow = document.getElementById('ci-hours-row');
+  if (s('hours')) {
+    setEl('ci-hours', s('hours'));
+    if (hoursRow) hoursRow.style.display = '';
+  } else {
+    if (hoursRow) hoursRow.style.display = 'none';
+  }
+  document.getElementById('contact-info-overlay').style.display = 'flex';
+}
+function closeContactInfo() {
+  document.getElementById('contact-info-overlay').style.display = 'none';
+}
+document.getElementById('contact-info-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeContactInfo();
+});
+
 // ---- Donation Modal ----
 var selectedAmount = 100;
 var donationFreq = 'once';
+var currentPayMethod = 'paypal';
 
 function openDonation() {
   document.getElementById('donation-overlay').style.display = 'flex';
   document.getElementById('donation-error').style.display = 'none';
+  setPayMethod('paypal');
   updateGiveBtn();
 }
 function closeDonation() {
@@ -213,6 +282,65 @@ function updateGiveBtn() {
   btn.textContent = 'Give ' + amt + freq + ' Now';
 }
 
+function setPayMethod(method) {
+  currentPayMethod = method;
+  ['paypal','cashapp','venmo','zelle'].forEach(function(m) {
+    var tab = document.getElementById('pm-tab-' + m);
+    if (tab) tab.classList.toggle('active', m === method);
+  });
+  var paypalContent = document.getElementById('pm-paypal-content');
+  var qrContent     = document.getElementById('pm-qr-content');
+  if (method === 'paypal') {
+    paypalContent.style.display = 'block';
+    qrContent.style.display     = 'none';
+  } else {
+    paypalContent.style.display = 'none';
+    qrContent.style.display     = 'block';
+    renderQR(method);
+  }
+}
+
+function renderQR(method) {
+  var handle = s(method);
+  var notConf = document.getElementById('qr-not-configured');
+  var qrImg   = document.getElementById('qr-img');
+  var qrHandle = document.getElementById('qr-handle');
+  var qrInstr  = document.getElementById('qr-instructions');
+
+  if (!handle) {
+    notConf.style.display = 'block';
+    qrImg.style.display   = 'none';
+    qrHandle.textContent  = '';
+    qrInstr.textContent   = '';
+    return;
+  }
+  notConf.style.display = 'none';
+  qrImg.style.display   = 'block';
+
+  var qrData, displayHandle, instructions;
+  if (method === 'cashapp') {
+    var cleanHandle = handle.startsWith('$') ? handle : '$' + handle;
+    qrData = 'https://cash.app/' + encodeURIComponent(cleanHandle);
+    displayHandle = cleanHandle;
+    instructions  = 'Open CashApp and scan, or tap the handle above';
+  } else if (method === 'venmo') {
+    var venmoHandle = handle.startsWith('@') ? handle.slice(1) : handle;
+    qrData = 'https://venmo.com/' + encodeURIComponent(venmoHandle);
+    displayHandle = '@' + venmoHandle;
+    instructions  = 'Open Venmo and scan, or search for the handle above';
+  } else {
+    qrData = handle;
+    displayHandle = handle;
+    instructions  = 'Open your Zelle app and send to the number/email above';
+  }
+
+  var size = 220;
+  qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(qrData) + '&size=' + size + 'x' + size + '&margin=10&color=0d1b2a';
+  qrImg.alt = method + ' QR Code';
+  qrHandle.textContent  = displayHandle;
+  qrInstr.textContent   = instructions;
+}
+
 function processDonation() {
   var errEl = document.getElementById('donation-error');
   errEl.style.display = 'none';
@@ -221,7 +349,7 @@ function processDonation() {
     errEl.style.display = 'block';
     return;
   }
-  var paypalEmail = SETTINGS.paypalEmail;
+  var paypalEmail = s('paypalEmail');
   if (!paypalEmail) {
     errEl.textContent = 'Donation processing is being set up. Please contact us directly to give.';
     errEl.style.display = 'block';
@@ -229,14 +357,15 @@ function processDonation() {
   }
   var fund = document.getElementById('fund-select').value;
   var fundLabels = { general:'General Fund', missions:'Global Missions', food:'Community Feeding Program', bibles:'Bible Distribution', youth:'Youth Ministry' };
+  var ministryName = s('ministryName') || 'Action Outreach Ministry';
   var params = new URLSearchParams({
-    cmd: donationFreq === 'monthly' ? '_xclick-subscriptions' : '_donations',
-    business: paypalEmail,
-    item_name: SETTINGS.ministryName + ' — ' + (fundLabels[fund] || 'General Fund'),
-    amount: selectedAmount.toFixed(2),
+    cmd:           donationFreq === 'monthly' ? '_xclick-subscriptions' : '_donations',
+    business:      paypalEmail,
+    item_name:     ministryName + ' — ' + (fundLabels[fund] || 'General Fund'),
+    amount:        selectedAmount.toFixed(2),
     currency_code: 'USD',
-    no_note: '0',
-    return: window.location.href,
+    no_note:       '0',
+    return:        window.location.href,
     cancel_return: window.location.href,
   });
   if (donationFreq === 'monthly') {
@@ -245,6 +374,12 @@ function processDonation() {
     params.set('t3', 'M');
     params.set('src', '1');
   }
+  // Record the donation intent
+  fetch('/api/donate/record', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ amount: selectedAmount, fund: fund, freq: donationFreq, processor: 'paypal' })
+  }).catch(function() {});
   window.open('https://www.paypal.com/donate?' + params.toString(), '_blank');
   closeDonation();
 }
@@ -256,16 +391,71 @@ function markPrayed(btn) {
   btn.disabled = true;
 }
 
-// ---- Forms ----
+// ---- Testimony Form ----
 document.getElementById('testimony-form').addEventListener('submit', function(e) {
   e.preventDefault();
-  document.getElementById('testimony-form').style.display = 'none';
-  document.getElementById('testimony-thanks').style.display = 'block';
+  var errEl = document.getElementById('testimony-err');
+  errEl.style.display = 'none';
+  var payload = {
+    name:  document.getElementById('t-name').value.trim() || 'Anonymous',
+    email: document.getElementById('t-email').value.trim(),
+    quote: document.getElementById('t-body').value.trim(),
+  };
+  if (!payload.quote) {
+    errEl.textContent = 'Please enter your testimony.';
+    errEl.style.display = 'block';
+    return;
+  }
+  fetch('/api/testimony', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('testimony-form').style.display = 'none';
+      document.getElementById('testimony-thanks').style.display = 'block';
+    } else {
+      errEl.textContent = d.error || 'Submission failed. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }).catch(function() {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  });
 });
+
+// ---- Prayer Form ----
 document.getElementById('prayer-form').addEventListener('submit', function(e) {
   e.preventDefault();
-  document.getElementById('prayer-form').style.display = 'none';
-  document.getElementById('prayer-thanks').style.display = 'block';
+  var errEl = document.getElementById('prayer-err');
+  errEl.style.display = 'none';
+  var payload = {
+    name:   document.getElementById('p-name').value.trim() || 'Anonymous',
+    email:  document.getElementById('p-email').value.trim(),
+    text:   document.getElementById('p-body').value.trim(),
+    urgent: document.getElementById('p-urgent').checked,
+  };
+  if (!payload.text) {
+    errEl.textContent = 'Please enter your prayer request.';
+    errEl.style.display = 'block';
+    return;
+  }
+  fetch('/api/prayer', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('prayer-form').style.display = 'none';
+      document.getElementById('prayer-thanks').style.display = 'block';
+    } else {
+      errEl.textContent = d.error || 'Submission failed. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }).catch(function() {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  });
 });
 
 // ---- Contact Form ----
@@ -342,14 +532,22 @@ document.getElementById('info-request-form').addEventListener('submit', function
 // ---- Admin Modal ----
 function openAdmin() {
   document.getElementById('admin-overlay').style.display = 'flex';
-  document.getElementById('admin-login-wrap').style.display = 'block';
-  document.getElementById('admin-panel').style.display = 'none';
-  document.getElementById('admin-user').value = '';
-  document.getElementById('admin-pw').value = '';
-  document.getElementById('admin-pw-err').style.display = 'none';
-  document.getElementById('admin-reset-wrap').style.display = 'none';
-  document.getElementById('admin-reset-err').style.display = 'none';
-  document.getElementById('admin-reset-ok').style.display = 'none';
+  if (currentAdminUser) {
+    document.getElementById('admin-login-wrap').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    var bar = document.getElementById('admin-logged-in-bar');
+    if (bar) bar.textContent = '✓ Logged in as ' + currentAdminUser.username;
+    adminTab('settings');
+  } else {
+    document.getElementById('admin-login-wrap').style.display = 'block';
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('admin-user').value = '';
+    document.getElementById('admin-pw').value = '';
+    document.getElementById('admin-pw-err').style.display = 'none';
+    document.getElementById('admin-reset-wrap').style.display = 'none';
+    document.getElementById('admin-reset-err').style.display = 'none';
+    document.getElementById('admin-reset-ok').style.display = 'none';
+  }
 }
 function closeAdmin() {
   document.getElementById('admin-overlay').style.display = 'none';
@@ -357,9 +555,10 @@ function closeAdmin() {
 document.getElementById('admin-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeAdmin();
 });
+
 function checkAdminPw() {
   var user = document.getElementById('admin-user').value.trim();
-  var pw = document.getElementById('admin-pw').value;
+  var pw   = document.getElementById('admin-pw').value;
   fetch('/api/auth/login', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -376,33 +575,26 @@ function checkAdminPw() {
       document.getElementById('admin-pw-err').style.display = 'block';
     }
   }).catch(function() {
-    // No backend (static hosting) — fall back to hardcoded credentials
-    if (user === 'admin' && pw === 'Ministrey2025') {
-      currentAdminUser = {username: 'admin', is_admin: true};
-      document.getElementById('admin-login-wrap').style.display = 'none';
-      document.getElementById('admin-panel').style.display = 'block';
-      var bar = document.getElementById('admin-logged-in-bar');
-      if (bar) bar.textContent = '✓ Logged in as admin';
-      adminTab('settings');
-    } else {
-      document.getElementById('admin-pw-err').style.display = 'block';
-    }
+    document.getElementById('admin-pw-err').style.display = 'block';
   });
 }
+
 document.getElementById('admin-pw').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') checkAdminPw();
 });
 document.getElementById('admin-user').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') document.getElementById('admin-pw').focus();
 });
+
 function toggleResetSection() {
   var wrap = document.getElementById('admin-reset-wrap');
   wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
 }
+
 function doResetCredentials() {
-  var code  = document.getElementById('admin-recovery-code').value.trim();
-  var user  = document.getElementById('admin-reset-user').value.trim();
-  var pw    = document.getElementById('admin-reset-pw').value;
+  var code = document.getElementById('admin-recovery-code').value.trim();
+  var user = document.getElementById('admin-reset-user').value.trim();
+  var pw   = document.getElementById('admin-reset-pw').value;
   document.getElementById('admin-reset-err').style.display = 'none';
   document.getElementById('admin-reset-ok').style.display  = 'none';
   fetch('/api/auth/reset', {
@@ -517,13 +709,15 @@ function adminTab(name) {
   document.querySelectorAll('.admin-tab-body').forEach(function(b) {
     b.style.display = b.id === 'admin-tab-' + name ? 'block' : 'none';
   });
-  if (name === 'settings') { populateSettingsTab(); loadSmtpConfig(); loadUserCount(); }
-  if (name === 'content') populateContentTab();
-  if (name === 'testimonies') renderAdminTestimonies();
-  if (name === 'events') renderAdminEvents();
-  if (name === 'prayer') renderAdminPrayers();
-  if (name === 'users') renderAdminUsers();
-  if (name === 'inforequests') renderAdminInfoRequests();
+  if (name === 'settings')    { populateSettingsTab(); loadSmtpConfig(); loadUserCount(); }
+  if (name === 'content')     { populateContentTab(); }
+  if (name === 'testimonies') { renderAdminTestimonies(); loadAdminPendingTestimonies(); }
+  if (name === 'events')      { renderAdminEvents(); }
+  if (name === 'prayer')      { renderAdminPrayers(); loadAdminPendingPrayers(); }
+  if (name === 'contacts')    { renderAdminContacts(); }
+  if (name === 'donations')   { renderAdminDonations(); }
+  if (name === 'users')       { renderAdminUsers(); }
+  if (name === 'inforequests'){ renderAdminInfoRequests(); }
 }
 
 function loadUserCount() {
@@ -535,27 +729,52 @@ function loadUserCount() {
 
 // ---- Settings Tab ----
 function populateSettingsTab() {
-  document.getElementById('admin-paypal-email').value = SETTINGS.paypalEmail || '';
-  document.getElementById('admin-ministry-name').value = SETTINGS.ministryName || '';
-  document.getElementById('admin-phone').value = SETTINGS.phone || '';
-  document.getElementById('admin-contact-email').value = SETTINGS.contactEmail || '';
-  document.getElementById('admin-tagline').value = CONTENT.tagline || '';
-  document.getElementById('admin-location').value = CONTENT.location || '';
-  document.getElementById('admin-new-pw').value = '';
+  var st = CONTENT.settings || {};
+  document.getElementById('admin-ministry-name').value = st.ministryName || '';
+  document.getElementById('admin-tagline').value       = st.tagline || '';
+  document.getElementById('admin-location').value      = st.location || '';
+  document.getElementById('admin-address').value       = st.address || '';
+  document.getElementById('admin-phone').value         = st.phone || '';
+  document.getElementById('admin-contact-email').value = st.contactEmail || '';
+  document.getElementById('admin-hours').value         = st.hours || '';
+  document.getElementById('admin-notify-email').value  = st.notifyEmail || '';
+  document.getElementById('admin-paypal-email').value  = st.paypalEmail || '';
+  document.getElementById('admin-cashapp').value       = st.cashapp || '';
+  document.getElementById('admin-venmo').value         = st.venmo || '';
+  document.getElementById('admin-zelle').value         = st.zelle || '';
+  document.getElementById('admin-new-pw').value  = '';
   document.getElementById('admin-new-pw2').value = '';
 }
+
 function saveAdminSettings() {
-  SETTINGS.paypalEmail = document.getElementById('admin-paypal-email').value.trim();
-  SETTINGS.ministryName = document.getElementById('admin-ministry-name').value.trim() || 'Action Outreach Ministry';
-  SETTINGS.phone = document.getElementById('admin-phone').value.trim();
-  SETTINGS.contactEmail = document.getElementById('admin-contact-email').value.trim();
-  CONTENT.tagline = document.getElementById('admin-tagline').value.trim();
-  CONTENT.location = document.getElementById('admin-location').value.trim();
-  localStorage.setItem('aom_settings', JSON.stringify(SETTINGS));
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  applyContent();
-  showSaveOk('admin-save-ok');
+  var settings = {
+    ministryName: document.getElementById('admin-ministry-name').value.trim() || 'Action Outreach Ministry',
+    tagline:      document.getElementById('admin-tagline').value.trim(),
+    location:     document.getElementById('admin-location').value.trim(),
+    address:      document.getElementById('admin-address').value.trim(),
+    phone:        document.getElementById('admin-phone').value.trim(),
+    contactEmail: document.getElementById('admin-contact-email').value.trim(),
+    hours:        document.getElementById('admin-hours').value.trim(),
+    notifyEmail:  document.getElementById('admin-notify-email').value.trim(),
+    paypalEmail:  document.getElementById('admin-paypal-email').value.trim(),
+    cashapp:      document.getElementById('admin-cashapp').value.trim(),
+    venmo:        document.getElementById('admin-venmo').value.trim(),
+    zelle:        document.getElementById('admin-zelle').value.trim(),
+  };
+  fetch('/api/admin/content', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({settings: settings})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      if (!CONTENT.settings) CONTENT.settings = {};
+      Object.assign(CONTENT.settings, settings);
+      applyContent();
+      showSaveOk('admin-save-ok');
+    }
+  }).catch(function() {});
 }
+
 function changeMyPassword() {
   var newPw  = document.getElementById('admin-new-pw').value;
   var newPw2 = document.getElementById('admin-new-pw2').value;
@@ -567,7 +786,7 @@ function changeMyPassword() {
     body: JSON.stringify({username: currentAdminUser.username, password: newPw})
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.ok) {
-      document.getElementById('admin-new-pw').value = '';
+      document.getElementById('admin-new-pw').value  = '';
       document.getElementById('admin-new-pw2').value = '';
       showSaveOk('admin-creds-ok');
     }
@@ -576,50 +795,176 @@ function changeMyPassword() {
 
 // ---- Content Tab ----
 function populateContentTab() {
-  document.getElementById('ct-outreach-title').value = CONTENT.outreachHeroTitle;
-  document.getElementById('ct-outreach-text').value = CONTENT.outreachHeroText;
-  document.getElementById('ct-about-title').value = CONTENT.aboutTitle;
-  document.getElementById('ct-about-1').value = CONTENT.aboutText1;
-  document.getElementById('ct-about-2').value = CONTENT.aboutText2;
-  document.getElementById('ct-test-title').value = CONTENT.testimoniesHeroTitle;
-  document.getElementById('ct-test-text').value = CONTENT.testimoniesHeroText;
-  document.getElementById('ct-events-title').value = CONTENT.eventsHeroTitle;
-  document.getElementById('ct-events-text').value = CONTENT.eventsHeroText;
-  document.getElementById('ct-prayer-title').value = CONTENT.prayerHeroTitle;
-  document.getElementById('ct-prayer-text').value = CONTENT.prayerHeroText;
-  CONTENT.cards.forEach(function(c, i) {
-    document.getElementById('ct-card-icon-' + i).value = c.icon;
-    document.getElementById('ct-card-title-' + i).value = c.title;
-    document.getElementById('ct-card-text-' + i).value = c.text;
+  document.getElementById('ct-outreach-title').value = CONTENT.outreachHeroTitle || '';
+  document.getElementById('ct-outreach-text').value  = CONTENT.outreachHeroText  || '';
+  document.getElementById('ct-about-title').value    = CONTENT.aboutTitle  || '';
+  document.getElementById('ct-about-1').value        = CONTENT.aboutText1  || '';
+  document.getElementById('ct-about-2').value        = CONTENT.aboutText2  || '';
+  document.getElementById('ct-test-title').value     = CONTENT.testimoniesHeroTitle || '';
+  document.getElementById('ct-test-text').value      = CONTENT.testimoniesHeroText  || '';
+  document.getElementById('ct-events-title').value   = CONTENT.eventsHeroTitle || '';
+  document.getElementById('ct-events-text').value    = CONTENT.eventsHeroText  || '';
+  document.getElementById('ct-prayer-title').value   = CONTENT.prayerHeroTitle || '';
+  document.getElementById('ct-prayer-text').value    = CONTENT.prayerHeroText  || '';
+  (CONTENT.cards || []).forEach(function(c, i) {
+    if (document.getElementById('ct-card-icon-' + i)) {
+      document.getElementById('ct-card-icon-' + i).value  = c.icon  || '';
+      document.getElementById('ct-card-title-' + i).value = c.title || '';
+      document.getElementById('ct-card-text-' + i).value  = c.text  || '';
+    }
   });
 }
+
 function saveContentTab() {
-  CONTENT.outreachHeroTitle = document.getElementById('ct-outreach-title').value.trim();
-  CONTENT.outreachHeroText = document.getElementById('ct-outreach-text').value.trim();
-  CONTENT.aboutTitle = document.getElementById('ct-about-title').value.trim();
-  CONTENT.aboutText1 = document.getElementById('ct-about-1').value.trim();
-  CONTENT.aboutText2 = document.getElementById('ct-about-2').value.trim();
-  CONTENT.testimoniesHeroTitle = document.getElementById('ct-test-title').value.trim();
-  CONTENT.testimoniesHeroText = document.getElementById('ct-test-text').value.trim();
-  CONTENT.eventsHeroTitle = document.getElementById('ct-events-title').value.trim();
-  CONTENT.eventsHeroText = document.getElementById('ct-events-text').value.trim();
-  CONTENT.prayerHeroTitle = document.getElementById('ct-prayer-title').value.trim();
-  CONTENT.prayerHeroText = document.getElementById('ct-prayer-text').value.trim();
-  CONTENT.cards.forEach(function(c, i) {
-    c.icon = document.getElementById('ct-card-icon-' + i).value.trim();
-    c.title = document.getElementById('ct-card-title-' + i).value.trim();
-    c.text = document.getElementById('ct-card-text-' + i).value.trim();
+  var cards = (CONTENT.cards || []).map(function(c, i) {
+    return {
+      icon:  document.getElementById('ct-card-icon-' + i)  ? document.getElementById('ct-card-icon-' + i).value.trim()  : c.icon,
+      title: document.getElementById('ct-card-title-' + i) ? document.getElementById('ct-card-title-' + i).value.trim() : c.title,
+      text:  document.getElementById('ct-card-text-' + i)  ? document.getElementById('ct-card-text-' + i).value.trim()  : c.text,
+    };
   });
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  applyContent();
-  showSaveOk('ct-save-ok');
+  var update = {
+    outreachHeroTitle:    document.getElementById('ct-outreach-title').value.trim(),
+    outreachHeroText:     document.getElementById('ct-outreach-text').value.trim(),
+    aboutTitle:           document.getElementById('ct-about-title').value.trim(),
+    aboutText1:           document.getElementById('ct-about-1').value.trim(),
+    aboutText2:           document.getElementById('ct-about-2').value.trim(),
+    testimoniesHeroTitle: document.getElementById('ct-test-title').value.trim(),
+    testimoniesHeroText:  document.getElementById('ct-test-text').value.trim(),
+    eventsHeroTitle:      document.getElementById('ct-events-title').value.trim(),
+    eventsHeroText:       document.getElementById('ct-events-text').value.trim(),
+    prayerHeroTitle:      document.getElementById('ct-prayer-title').value.trim(),
+    prayerHeroText:       document.getElementById('ct-prayer-text').value.trim(),
+    cards:                cards,
+  };
+  fetch('/api/admin/content', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(update)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      Object.assign(CONTENT, update);
+      applyContent();
+      showSaveOk('ct-save-ok');
+    }
+  }).catch(function() {});
+}
+
+// ---- Pending Testimonies (admin) ----
+function loadAdminPendingTestimonies() {
+  var wrap = document.getElementById('admin-pending-testimonies');
+  if (!wrap) return;
+  fetch('/api/admin/pending').then(function(r) { return r.json(); }).then(function(d) {
+    var items = (d.testimonies || []);
+    if (!items.length) {
+      wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;margin-bottom:8px;">No pending submissions.</p>';
+      return;
+    }
+    wrap.innerHTML = items.map(function(item) {
+      var date = new Date(item.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      return '<div class="admin-pending-item">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+          '<strong style="font-size:13px;color:#fff;">' + escHtml(item.name) + '</strong>' +
+          '<span style="font-size:11px;color:#94a3b8;">' + date + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:8px;font-style:italic;">"' + escHtml(item.quote.substring(0,120)) + (item.quote.length > 120 ? '…' : '') + '"</div>' +
+        (item.email ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">✉ ' + escHtml(item.email) + '</div>' : '') +
+        '<div style="display:flex;gap:6px;">' +
+          '<button class="admin-item-btn" style="background:rgba(134,239,172,0.15);border-color:rgba(134,239,172,0.4);color:#86efac;" onclick="approveTestimony(\'' + item.id + '\')">✓ Approve & Publish</button>' +
+          '<button class="admin-item-btn del" onclick="rejectTestimony(\'' + item.id + '\')">✕ Reject</button>' +
+        '</div></div>';
+    }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load.</p>';
+  });
+}
+
+function approveTestimony(id) {
+  fetch('/api/admin/testimony/approve', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      // Refresh live content and admin list
+      fetch('/api/content').then(function(r) { return r.json(); }).then(function(c) {
+        CONTENT = c; applyContent();
+      });
+      loadAdminPendingTestimonies();
+      renderAdminTestimonies();
+    }
+  });
+}
+
+function rejectTestimony(id) {
+  if (!confirm('Reject and delete this testimony submission?')) return;
+  fetch('/api/admin/testimony/reject', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) loadAdminPendingTestimonies();
+  });
+}
+
+// ---- Pending Prayers (admin) ----
+function loadAdminPendingPrayers() {
+  var wrap = document.getElementById('admin-pending-prayers');
+  if (!wrap) return;
+  fetch('/api/admin/pending').then(function(r) { return r.json(); }).then(function(d) {
+    var items = (d.prayers || []);
+    if (!items.length) {
+      wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;margin-bottom:8px;">No pending submissions.</p>';
+      return;
+    }
+    wrap.innerHTML = items.map(function(item) {
+      var date = new Date(item.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      return '<div class="admin-pending-item">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+          '<strong style="font-size:13px;color:#fff;">' + escHtml(item.name) + (item.urgent ? ' <span style="background:#dc2626;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;">URGENT</span>' : '') + '</strong>' +
+          '<span style="font-size:11px;color:#94a3b8;">' + date + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:8px;">' + escHtml(item.text.substring(0,120)) + (item.text.length > 120 ? '…' : '') + '</div>' +
+        (item.email ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">✉ ' + escHtml(item.email) + '</div>' : '') +
+        '<div style="display:flex;gap:6px;">' +
+          '<button class="admin-item-btn" style="background:rgba(134,239,172,0.15);border-color:rgba(134,239,172,0.4);color:#86efac;" onclick="approvePrayer(\'' + item.id + '\')">✓ Approve & Publish</button>' +
+          '<button class="admin-item-btn del" onclick="rejectPrayer(\'' + item.id + '\')">✕ Reject</button>' +
+        '</div></div>';
+    }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load.</p>';
+  });
+}
+
+function approvePrayer(id) {
+  fetch('/api/admin/prayer/approve', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      fetch('/api/content').then(function(r) { return r.json(); }).then(function(c) {
+        CONTENT = c; applyContent();
+      });
+      loadAdminPendingPrayers();
+      renderAdminPrayers();
+    }
+  });
+}
+
+function rejectPrayer(id) {
+  if (!confirm('Reject and delete this prayer request submission?')) return;
+  fetch('/api/admin/prayer/reject', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id: id})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) loadAdminPendingPrayers();
+  });
 }
 
 // ---- Testimonies CRUD ----
 function renderAdminTestimonies() {
   var wrap = document.getElementById('admin-testimonies-list');
-  if (!CONTENT.testimonies.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No testimonies yet.</p>'; return; }
-  wrap.innerHTML = CONTENT.testimonies.map(function(t, i) {
+  var testimonies = CONTENT.testimonies || [];
+  if (!testimonies.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No testimonies published yet.</p>'; return; }
+  wrap.innerHTML = testimonies.map(function(t, i) {
     return '<div class="admin-item">' +
       '<div class="admin-item-preview">"' + escHtml(t.quote.substring(0, 55)) + '…"</div>' +
       '<div class="admin-item-actions">' +
@@ -628,44 +973,63 @@ function renderAdminTestimonies() {
       '</div></div>';
   }).join('');
 }
+
 function editTestimony(idx) {
-  var t = CONTENT.testimonies[idx];
-  document.getElementById('t-edit-idx').value = idx;
-  document.getElementById('t-edit-quote').value = t.quote;
+  var t = (CONTENT.testimonies || [])[idx];
+  if (!t) return;
+  document.getElementById('t-edit-idx').value   = idx;
+  document.getElementById('t-edit-quote').value  = t.quote;
   document.getElementById('t-edit-author').value = t.author;
   document.getElementById('admin-testimony-edit').style.display = 'block';
 }
 function newTestimony() {
-  document.getElementById('t-edit-idx').value = -1;
-  document.getElementById('t-edit-quote').value = '';
+  document.getElementById('t-edit-idx').value   = -1;
+  document.getElementById('t-edit-quote').value  = '';
   document.getElementById('t-edit-author').value = '';
   document.getElementById('admin-testimony-edit').style.display = 'block';
 }
 function saveTestimony() {
-  var idx = parseInt(document.getElementById('t-edit-idx').value);
-  var quote = document.getElementById('t-edit-quote').value.trim();
+  var idx    = parseInt(document.getElementById('t-edit-idx').value);
+  var quote  = document.getElementById('t-edit-quote').value.trim();
   var author = document.getElementById('t-edit-author').value.trim();
   if (!quote) return;
-  if (idx === -1) { CONTENT.testimonies.push({ quote: quote, author: author }); }
-  else { CONTENT.testimonies[idx] = { quote: quote, author: author }; }
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderTestimonies();
-  renderAdminTestimonies();
-  document.getElementById('admin-testimony-edit').style.display = 'none';
+  var testimonies = (CONTENT.testimonies || []).slice();
+  if (idx === -1) { testimonies.push({quote: quote, author: author}); }
+  else { testimonies[idx] = {quote: quote, author: author}; }
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({testimonies: testimonies})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.testimonies = testimonies;
+      renderTestimonies();
+      renderAdminTestimonies();
+      document.getElementById('admin-testimony-edit').style.display = 'none';
+    }
+  });
 }
 function deleteTestimony(idx) {
   if (!confirm('Delete this testimony?')) return;
-  CONTENT.testimonies.splice(idx, 1);
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderTestimonies();
-  renderAdminTestimonies();
+  var testimonies = (CONTENT.testimonies || []).slice();
+  testimonies.splice(idx, 1);
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({testimonies: testimonies})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.testimonies = testimonies;
+      renderTestimonies();
+      renderAdminTestimonies();
+    }
+  });
 }
 
 // ---- Events CRUD ----
 function renderAdminEvents() {
   var wrap = document.getElementById('admin-events-list');
-  if (!CONTENT.events.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No events yet.</p>'; return; }
-  wrap.innerHTML = CONTENT.events.map(function(e, i) {
+  var events = CONTENT.events || [];
+  if (!events.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No events yet.</p>'; return; }
+  wrap.innerHTML = events.map(function(e, i) {
     return '<div class="admin-item">' +
       '<div class="admin-item-preview"><strong>' + escHtml(e.month) + ' ' + escHtml(e.day) + '</strong> — ' + escHtml(e.title) + '</div>' +
       '<div class="admin-item-actions">' +
@@ -675,13 +1039,14 @@ function renderAdminEvents() {
   }).join('');
 }
 function editEvent(idx) {
-  var e = CONTENT.events[idx];
-  document.getElementById('ev-edit-idx').value = idx;
+  var e = (CONTENT.events || [])[idx];
+  if (!e) return;
+  document.getElementById('ev-edit-idx').value   = idx;
   document.getElementById('ev-edit-month').value = e.month;
-  document.getElementById('ev-edit-day').value = e.day;
+  document.getElementById('ev-edit-day').value   = e.day;
   document.getElementById('ev-edit-title').value = e.title;
-  document.getElementById('ev-edit-meta').value = e.meta;
-  document.getElementById('ev-edit-text').value = e.text;
+  document.getElementById('ev-edit-meta').value  = e.meta;
+  document.getElementById('ev-edit-text').value  = e.text;
   document.getElementById('admin-event-edit').style.display = 'block';
 }
 function newEvent() {
@@ -690,35 +1055,48 @@ function newEvent() {
   document.getElementById('admin-event-edit').style.display = 'block';
 }
 function saveEvent() {
-  var idx = parseInt(document.getElementById('ev-edit-idx').value);
+  var idx  = parseInt(document.getElementById('ev-edit-idx').value);
   var item = {
     month: document.getElementById('ev-edit-month').value.trim().toUpperCase(),
-    day: document.getElementById('ev-edit-day').value.trim(),
+    day:   document.getElementById('ev-edit-day').value.trim(),
     title: document.getElementById('ev-edit-title').value.trim(),
-    meta: document.getElementById('ev-edit-meta').value.trim(),
-    text: document.getElementById('ev-edit-text').value.trim()
+    meta:  document.getElementById('ev-edit-meta').value.trim(),
+    text:  document.getElementById('ev-edit-text').value.trim()
   };
   if (!item.title) return;
-  if (idx === -1) { CONTENT.events.push(item); }
-  else { CONTENT.events[idx] = item; }
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderEvents();
-  renderAdminEvents();
-  document.getElementById('admin-event-edit').style.display = 'none';
+  var events = (CONTENT.events || []).slice();
+  if (idx === -1) { events.push(item); }
+  else { events[idx] = item; }
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({events: events})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.events = events;
+      renderEvents();
+      renderAdminEvents();
+      document.getElementById('admin-event-edit').style.display = 'none';
+    }
+  });
 }
 function deleteEvent(idx) {
   if (!confirm('Delete this event?')) return;
-  CONTENT.events.splice(idx, 1);
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderEvents();
-  renderAdminEvents();
+  var events = (CONTENT.events || []).slice();
+  events.splice(idx, 1);
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({events: events})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) { CONTENT.events = events; renderEvents(); renderAdminEvents(); }
+  });
 }
 
 // ---- Prayer CRUD ----
 function renderAdminPrayers() {
   var wrap = document.getElementById('admin-prayers-list');
-  if (!CONTENT.prayers.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No prayer requests yet.</p>'; return; }
-  wrap.innerHTML = CONTENT.prayers.map(function(p, i) {
+  var prayers = CONTENT.prayers || [];
+  if (!prayers.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No prayer requests published yet.</p>'; return; }
+  wrap.innerHTML = prayers.map(function(p, i) {
     return '<div class="admin-item">' +
       '<div class="admin-item-preview">' + (p.urgent ? '<span class="admin-urgent-badge">URGENT</span> ' : '') + escHtml(p.text.substring(0, 55)) + '…</div>' +
       '<div class="admin-item-actions">' +
@@ -728,41 +1106,132 @@ function renderAdminPrayers() {
   }).join('');
 }
 function editPrayer(idx) {
-  var p = CONTENT.prayers[idx];
-  document.getElementById('pr-edit-idx').value = idx;
-  document.getElementById('pr-edit-text').value = p.text;
-  document.getElementById('pr-edit-meta').value = p.meta;
+  var p = (CONTENT.prayers || [])[idx];
+  if (!p) return;
+  document.getElementById('pr-edit-idx').value    = idx;
+  document.getElementById('pr-edit-text').value   = p.text;
+  document.getElementById('pr-edit-meta').value   = p.meta;
   document.getElementById('pr-edit-urgent').checked = p.urgent;
   document.getElementById('admin-prayer-edit').style.display = 'block';
 }
 function newPrayer() {
-  document.getElementById('pr-edit-idx').value = -1;
-  document.getElementById('pr-edit-text').value = '';
-  document.getElementById('pr-edit-meta').value = '';
-  document.getElementById('pr-edit-urgent').checked = false;
+  document.getElementById('pr-edit-idx').value      = -1;
+  document.getElementById('pr-edit-text').value      = '';
+  document.getElementById('pr-edit-meta').value      = '';
+  document.getElementById('pr-edit-urgent').checked  = false;
   document.getElementById('admin-prayer-edit').style.display = 'block';
 }
 function savePrayer() {
-  var idx = parseInt(document.getElementById('pr-edit-idx').value);
+  var idx  = parseInt(document.getElementById('pr-edit-idx').value);
   var item = {
-    text: document.getElementById('pr-edit-text').value.trim(),
-    meta: document.getElementById('pr-edit-meta').value.trim(),
+    text:   document.getElementById('pr-edit-text').value.trim(),
+    meta:   document.getElementById('pr-edit-meta').value.trim(),
     urgent: document.getElementById('pr-edit-urgent').checked
   };
   if (!item.text) return;
-  if (idx === -1) { CONTENT.prayers.push(item); }
-  else { CONTENT.prayers[idx] = item; }
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderPrayers();
-  renderAdminPrayers();
-  document.getElementById('admin-prayer-edit').style.display = 'none';
+  var prayers = (CONTENT.prayers || []).slice();
+  if (idx === -1) { prayers.push(item); }
+  else { prayers[idx] = item; }
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({prayers: prayers})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.prayers = prayers;
+      renderPrayers();
+      renderAdminPrayers();
+      document.getElementById('admin-prayer-edit').style.display = 'none';
+    }
+  });
 }
 function deletePrayer(idx) {
   if (!confirm('Delete this prayer request?')) return;
-  CONTENT.prayers.splice(idx, 1);
-  localStorage.setItem('aom_content', JSON.stringify(CONTENT));
-  renderPrayers();
-  renderAdminPrayers();
+  var prayers = (CONTENT.prayers || []).slice();
+  prayers.splice(idx, 1);
+  fetch('/api/admin/content', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({prayers: prayers})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) { CONTENT.prayers = prayers; renderPrayers(); renderAdminPrayers(); }
+  });
+}
+
+// ---- Contacts Admin ----
+function renderAdminContacts() {
+  var wrap = document.getElementById('admin-contacts-list');
+  wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
+  fetch('/api/admin/contacts').then(function(r) { return r.json(); }).then(function(items) {
+    if (!Array.isArray(items) || !items.length) {
+      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No contact messages yet.</p>';
+      return;
+    }
+    wrap.innerHTML = items.map(function(c) {
+      var date = new Date(c.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit'});
+      return '<div class="admin-item" style="flex-direction:column;align-items:flex-start;gap:4px;">' +
+        '<div style="display:flex;justify-content:space-between;width:100%;">' +
+          '<strong style="font-size:13px;">' + escHtml(c.name) + '</strong>' +
+          '<span style="font-size:11px;color:#94a3b8;">' + date + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#86b4f0;">✉ ' + escHtml(c.email) + '</div>' +
+        '<div style="font-size:13px;color:#f0c040;font-weight:600;">' + escHtml(c.subject) + '</div>' +
+        '<div style="font-size:13px;color:rgba(255,255,255,0.7);">' + escHtml(c.message) + '</div>' +
+        '</div>';
+    }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load contacts.</p>';
+  });
+}
+
+// ---- Donations Admin ----
+function renderAdminDonations() {
+  var wrap = document.getElementById('admin-donations-list');
+  wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
+  fetch('/api/admin/transactions').then(function(r) { return r.json(); }).then(function(items) {
+    if (!Array.isArray(items) || !items.length) {
+      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No donation records yet.</p>';
+      return;
+    }
+    var total = items.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+    wrap.innerHTML = '<div style="background:rgba(201,151,58,0.12);border:1px solid rgba(201,151,58,0.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#f0c040;font-weight:600;">Total recorded: $' + total.toFixed(2) + ' across ' + items.length + ' transaction' + (items.length === 1 ? '' : 's') + '</div>' +
+      items.slice().reverse().map(function(t) {
+        var date = new Date(t.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+        return '<div class="admin-item">' +
+          '<div class="admin-item-preview"><strong>$' + (t.amount||0).toFixed(2) + (t.freq==='monthly'?'/mo':'') + '</strong> · ' + escHtml(t.fund||'general') + ' · ' + escHtml(t.processor||'paypal') + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + date + '</div>' +
+          '</div>';
+      }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load donations.</p>';
+  });
+}
+
+// ---- Info Requests Admin ----
+function renderAdminInfoRequests() {
+  var wrap = document.getElementById('admin-inforeq-list');
+  wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
+  fetch('/api/admin/info-requests').then(function(r) { return r.json(); }).then(function(reqs) {
+    if (!Array.isArray(reqs) || !reqs.length) {
+      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No requests yet.</p>';
+      return;
+    }
+    wrap.innerHTML = reqs.map(function(r) {
+      var date = new Date(r.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      var interests = (r.interests && r.interests.length) ? r.interests.join(', ') : '—';
+      return '<div class="admin-item" style="flex-direction:column;align-items:flex-start;gap:4px;">' +
+        '<div style="display:flex;justify-content:space-between;width:100%;align-items:center;">' +
+          '<div class="admin-item-preview" style="font-weight:700;">' + escHtml(r.name) + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;">' + date + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#cbd5e1;">📍 ' + escHtml(r.address) + '</div>' +
+        (r.email ? '<div style="font-size:12px;color:#94a3b8;">✉ ' + escHtml(r.email) + '</div>' : '') +
+        (r.phone ? '<div style="font-size:12px;color:#94a3b8;">📞 ' + escHtml(r.phone) + '</div>' : '') +
+        '<div style="font-size:12px;color:#f0c040;margin-top:2px;">Interested in: ' + escHtml(interests) + '</div>' +
+        (r.comments ? '<div style="font-size:12px;color:#94a3b8;margin-top:2px;font-style:italic;">"' + escHtml(r.comments) + '"</div>' : '') +
+        '</div>';
+    }).join('');
+  }).catch(function() {
+    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load requests.</p>';
+  });
 }
 
 // ---- User Management ----
@@ -773,7 +1242,7 @@ function renderAdminUsers() {
     if (!users.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No users yet.</p>'; return; }
     wrap.innerHTML = users.map(function(u) {
       var isSelf = currentAdminUser && u.username === currentAdminUser.username;
-      var slug = u.username.replace(/[^a-z0-9]/gi, '_');
+      var slug   = u.username.replace(/[^a-z0-9]/gi, '_');
       return '<div class="admin-item">' +
         '<div class="admin-item-preview"><strong>' + escHtml(u.username) + '</strong>' +
         (u.is_admin ? ' <span style="color:#fbbf24;font-size:11px;margin-left:4px;">ADMIN</span>' : '') +
@@ -786,7 +1255,7 @@ function renderAdminUsers() {
         (!isSelf ? '<button class="admin-item-btn del" onclick="deleteAomUser(\'' + escHtml(u.username) + '\')">Delete</button>' : '') +
         '</div>' +
         '<div id="user-pw-row-' + slug + '" style="display:none;margin-top:8px;">' +
-        '<input type="password" id="user-pw-input-' + slug + '" data-username="' + escHtml(u.username) + '" class="custom-input" placeholder="New password" style="width:calc(100% - 80px);display:inline-block;vertical-align:middle;">' +
+        '<input type="password" id="user-pw-input-' + slug + '" class="custom-input" placeholder="New password" style="width:calc(100% - 80px);display:inline-block;vertical-align:middle;">' +
         '<button class="admin-item-btn" style="margin-left:6px;vertical-align:middle;" onclick="saveUserPw(\'' + escHtml(u.username) + '\')">Set</button>' +
         '</div>' +
         '</div>';
@@ -796,13 +1265,13 @@ function renderAdminUsers() {
 
 function promptSetUserPw(username) {
   var slug = username.replace(/[^a-z0-9]/gi, '_');
-  var row = document.getElementById('user-pw-row-' + slug);
+  var row  = document.getElementById('user-pw-row-' + slug);
   if (row) row.style.display = row.style.display === 'none' ? 'block' : 'none';
 }
 
 function saveUserPw(username) {
   var slug = username.replace(/[^a-z0-9]/gi, '_');
-  var pw = document.getElementById('user-pw-input-' + slug).value;
+  var pw   = document.getElementById('user-pw-input-' + slug).value;
   if (!pw) return;
   fetch('/api/admin/set-password', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -844,9 +1313,9 @@ function createAomUser() {
     body: JSON.stringify({username: username, password: pw, contact_email: email, is_admin: isAdmin})
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.ok) {
-      document.getElementById('new-user-name').value = '';
+      document.getElementById('new-user-name').value  = '';
       document.getElementById('new-user-email').value = '';
-      document.getElementById('new-user-pw').value = '';
+      document.getElementById('new-user-pw').value    = '';
       document.getElementById('new-user-admin').checked = false;
       renderAdminUsers();
       showSaveOk('new-user-ok');
@@ -857,39 +1326,7 @@ function createAomUser() {
   });
 }
 
-// ---- Info Requests Admin ----
-function renderAdminInfoRequests() {
-  var wrap = document.getElementById('admin-inforeq-list');
-  wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
-  fetch('/api/admin/info-requests').then(function(r) { return r.json(); }).then(function(reqs) {
-    if (!Array.isArray(reqs) || !reqs.length) {
-      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No requests yet.</p>';
-      return;
-    }
-    wrap.innerHTML = reqs.map(function(r) {
-      var date = new Date(r.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-      var interests = (r.interests && r.interests.length) ? r.interests.join(', ') : '—';
-      return '<div class="admin-item" style="flex-direction:column;align-items:flex-start;gap:4px;">' +
-        '<div style="display:flex;justify-content:space-between;width:100%;align-items:center;">' +
-          '<div class="admin-item-preview" style="font-weight:700;">' + escHtml(r.name) + '</div>' +
-          '<div style="font-size:11px;color:#94a3b8;">' + date + '</div>' +
-        '</div>' +
-        '<div style="font-size:12px;color:#cbd5e1;">📍 ' + escHtml(r.address) + '</div>' +
-        (r.email ? '<div style="font-size:12px;color:#94a3b8;">✉ ' + escHtml(r.email) + '</div>' : '') +
-        (r.phone ? '<div style="font-size:12px;color:#94a3b8;">📞 ' + escHtml(r.phone) + '</div>' : '') +
-        '<div style="font-size:12px;color:#f0c040;margin-top:2px;">Interested in: ' + escHtml(interests) + '</div>' +
-        (r.comments ? '<div style="font-size:12px;color:#94a3b8;margin-top:2px;font-style:italic;">"' + escHtml(r.comments) + '"</div>' : '') +
-        '</div>';
-    }).join('');
-  }).catch(function() {
-    wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load requests.</p>';
-  });
-}
-
 // ---- Keyboard ----
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') { closeDonation(); closeAdmin(); }
+  if (e.key === 'Escape') { closeDonation(); closeAdmin(); closeContactInfo(); }
 });
-
-// ---- Init ----
-applyContent();
