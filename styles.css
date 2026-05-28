@@ -878,6 +878,58 @@ textarea.custom-input {
   margin-bottom: 10px;
 }
 
+/* ---- PayPal Setup Card (admin) ---- */
+.paypal-setup-card {
+  background: rgba(0,156,222,0.07);
+  border: 1px solid rgba(0,156,222,0.2);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.paypal-setup-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5b9bd5;
+  margin-bottom: 8px;
+}
+.paypal-setup-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 10px;
+}
+.paypal-ipn-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.paypal-ipn-url {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #86efac;
+  font-family: monospace;
+  word-break: break-all;
+}
+.paypal-copy-btn {
+  padding: 7px 14px !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.paypal-setup-steps {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  padding-left: 18px;
+  line-height: 1.9;
+  margin-bottom: 12px;
+}
+.paypal-setup-steps strong { color: rgba(255,255,255,0.8); }
+
 /* ---- QR Grid (all methods) ---- */
 .qr-grid-all {
   display: grid;

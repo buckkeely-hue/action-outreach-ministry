@@ -720,7 +720,7 @@ function adminTab(name) {
   if (name === 'prayer')      { renderAdminPrayers(); loadAdminPendingPrayers(); }
   if (name === 'newsletter')  { populateNewsletterTab(); }
   if (name === 'contacts')    { renderAdminContacts(); }
-  if (name === 'donations')   { renderAdminDonations(); }
+  if (name === 'donations')   { renderAdminDonations(); populateDonationsSetup(); }
   if (name === 'users')       { renderAdminUsers(); }
   if (name === 'inforequests'){ renderAdminInfoRequests(); }
 }
@@ -1352,6 +1352,20 @@ function createAomUser() {
       errEl.textContent = d.error || 'Failed to create user.';
       errEl.style.display = 'block';
     }
+  });
+}
+
+// ---- Donations Setup ----
+function populateDonationsSetup() {
+  var el = document.getElementById('ipn-url-display');
+  if (el) el.textContent = window.location.origin + '/api/paypal/ipn';
+}
+
+function copyIpnUrl() {
+  var url = window.location.origin + '/api/paypal/ipn';
+  navigator.clipboard.writeText(url).then(function() {
+    var btn = document.querySelector('.paypal-copy-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
   });
 }
 

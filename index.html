@@ -577,7 +577,24 @@
 
         <!-- Donations Tab -->
         <div id="admin-tab-donations" class="admin-tab-body" style="display:none;">
-          <p style="font-size:13px;color:#94a3b8;margin-bottom:12px;">Recorded donation intents (PayPal redirects logged here).</p>
+
+          <!-- PayPal Setup Card -->
+          <div class="paypal-setup-card">
+            <div class="paypal-setup-title">⚙️ PayPal IPN Setup</div>
+            <p class="paypal-setup-desc">To receive confirmed donation alerts, set this URL in your PayPal account:</p>
+            <div class="paypal-ipn-url-row">
+              <code id="ipn-url-display" class="paypal-ipn-url"></code>
+              <button class="form-btn paypal-copy-btn" onclick="copyIpnUrl()">Copy</button>
+            </div>
+            <ol class="paypal-setup-steps">
+              <li>Log in to <strong>paypal.com</strong> → gear icon → <strong>Account Settings</strong></li>
+              <li>Left menu: <strong>Notifications → Instant Payment Notifications</strong></li>
+              <li>Click <strong>Choose IPN Settings</strong></li>
+              <li>Paste the URL above → select <strong>Receive IPN messages</strong> → Save</li>
+            </ol>
+            <a class="paypal-giving-link" href="https://www.paypal.com/us/webapps/mpp/givingfund" target="_blank" rel="noopener">Apply for PayPal Giving Fund (0% fees for verified nonprofits) →</a>
+          </div>
+
           <div id="admin-donations-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
         </div>
 
