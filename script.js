@@ -76,6 +76,7 @@ var CONTENT_DEFAULTS = {
     .then(function(d) {
       if (d.authenticated && d.is_admin) {
         currentAdminUser = { username: d.username, is_admin: d.is_admin };
+        _applyNewsletterNavVisibility();
       }
     })
     .catch(function() {});
