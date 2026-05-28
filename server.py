@@ -786,11 +786,10 @@ class AOMHandler(BaseHTTPRequestHandler):
         admin = self._require_admin()
         if not admin:
             return
-        cfg = _load_smtp()
-        users = _load_users()
-        to_addr = users.get(admin, {}).get('contact_email') or cfg.get('username', '')
+        cfg     = _load_smtp()
+        to_addr = _notify_email()
         if not to_addr:
-            return self._err('No email address on file for your account')
+            return self._err('No notification email configured — set it in Settings first')
         try:
             _send_email(cfg, to_addr, 'SMTP Test — Action Outreach Ministry',
                         'Your SMTP settings are working correctly.')
