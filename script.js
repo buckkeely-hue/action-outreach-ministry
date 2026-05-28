@@ -208,7 +208,6 @@ document.querySelectorAll('.nav-tab').forEach(function(btn) {
 // ---- Newsletter Modal ----
 function openNewsletter() {
   var nl = CONTENT.newsletter || {};
-  if (!nl.visible && !currentAdminUser) return;
   setEl('nl-title', nl.title || 'Ministry Newsletter');
   var issueEl = document.getElementById('nl-issue');
   var dateEl  = document.getElementById('nl-date');
@@ -227,9 +226,7 @@ document.getElementById('newsletter-overlay').addEventListener('click', function
 
 function _applyNewsletterNavVisibility() {
   var btn = document.getElementById('nav-newsletter');
-  if (!btn) return;
-  var nl = CONTENT.newsletter || {};
-  btn.style.display = (nl.visible || currentAdminUser) ? '' : 'none';
+  if (btn) btn.style.display = '';
 }
 
 // ---- Contact Info Modal ----
