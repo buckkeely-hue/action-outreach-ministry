@@ -27,6 +27,7 @@ BASE_DIR  = Path(__file__).parent
 USERS_FILE         = BASE_DIR / 'ministry_users.json'
 SESSIONS_FILE      = BASE_DIR / 'ministry_sessions.json'
 TXNS_FILE          = BASE_DIR / 'ministry_transactions.json'
+DONATIONS_FILE     = BASE_DIR / 'confirmed_donations.json'
 SMTP_FILE          = BASE_DIR / 'smtp_config.json'
 INFO_REQUESTS_FILE = BASE_DIR / 'info_requests.json'
 CONTENT_FILE       = BASE_DIR / 'ministry_content.json'
@@ -129,8 +130,10 @@ def _save_json(path, data):
 
 def _load_users():          return _load_json(USERS_FILE, {})
 def _save_users(u):         _save_json(USERS_FILE, u)
-def _load_txns():           return _load_json(TXNS_FILE, [])
-def _save_txns(t):          _save_json(TXNS_FILE, t)
+def _load_txns():               return _load_json(TXNS_FILE, [])
+def _save_txns(t):              _save_json(TXNS_FILE, t)
+def _load_donations():          return _load_json(DONATIONS_FILE, [])
+def _save_donations(d):         _save_json(DONATIONS_FILE, d)
 def _load_smtp():           return _load_json(SMTP_FILE, {})
 def _save_smtp(cfg):        _save_json(SMTP_FILE, cfg)
 def _load_info_requests():  return _load_json(INFO_REQUESTS_FILE, [])
@@ -421,6 +424,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_admin_contacts()
         if path == '/api/admin/pending':
             return self._api_admin_pending()
+        if path == '/api/admin/donations':
+            return self._api_admin_donations()
 
         # Static file
         file_path = BASE_DIR / path.lstrip('/')
@@ -461,6 +466,7 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/testimony':                 self._api_submit_testimony,
             '/api/prayer':                    self._api_submit_prayer,
             '/api/donate/record':             self._api_donate_record,
+            '/api/paypal/ipn':                self._api_paypal_ipn,
             '/api/info-request':              self._api_info_request,
             '/api/contact':                   self._api_contact,
         }
@@ -949,6 +955,93 @@ class AOMHandler(BaseHTTPRequestHandler):
         txns.append(txn)
         _save_txns(txns)
         self._json({'ok': True})
+
+    def _api_admin_donations(self):
+        if not self._require_admin():
+            return
+        self._json(_load_donations())
+
+    def _api_paypal_ipn(self):
+        # Read raw IPN body
+        length = int(self.headers.get('Content-Length', 0))
+        raw = self.rfile.read(length)
+
+        # Send verification back to PayPal
+        verify_url = 'https://ipnpb.paypal.com/cgi-bin/webscr'
+        verify_body = b'cmd=_notify-validate&' + raw
+        try:
+            req = urllib.request.Request(
+                verify_url,
+                data=verify_body,
+                headers={'Content-Type': 'application/x-www-form-urlencoded',
+                         'User-Agent': 'AOM-IPN/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = resp.read().decode()
+        except Exception:
+            self.send_response(200)
+            self.end_headers()
+            return
+
+        if result != 'VERIFIED':
+            self.send_response(200)
+            self.end_headers()
+            return
+
+        # Parse IPN fields
+        from urllib.parse import parse_qs
+        fields = {k: v[0] for k, v in parse_qs(raw.decode()).items()}
+
+        payment_status = fields.get('payment_status', '')
+        txn_type       = fields.get('txn_type', '')
+        # Accept completed one-time and subscription payments
+        valid_types    = {'web_accept', 'subscr_payment', 'express_checkout', 'cart', ''}
+        if payment_status != 'Completed' or txn_type not in valid_types:
+            self.send_response(200)
+            self.end_headers()
+            return
+
+        amount      = float(fields.get('mc_gross', 0))
+        currency    = fields.get('mc_currency', 'USD')
+        donor_name  = fields.get('first_name', '') + ' ' + fields.get('last_name', '')
+        donor_email = fields.get('payer_email', '')
+        txn_id      = fields.get('txn_id', secrets.token_hex(8))
+        item_name   = fields.get('item_name', 'General Fund')
+        freq        = 'monthly' if txn_type == 'subscr_payment' else 'once'
+
+        donation = {
+            'id':          txn_id,
+            'amount':      amount,
+            'currency':    currency,
+            'donor_name':  donor_name.strip(),
+            'donor_email': donor_email,
+            'fund':        item_name,
+            'freq':        freq,
+            'timestamp':   int(time.time()),
+            'source':      'paypal_ipn',
+        }
+        donations = _load_donations()
+        # Deduplicate by txn_id
+        if not any(d.get('id') == txn_id for d in donations):
+            donations.append(donation)
+            _save_donations(donations)
+            freq_label = ' (monthly)' if freq == 'monthly' else ''
+            msg = f'${amount:.2f}{freq_label} from {donor_name.strip() or donor_email} — {item_name}'
+            _push('💰 New Donation!', msg, ['money_with_wings'])
+            _send_email(
+                _load_smtp(),
+                _notify_email(),
+                'New Donation — Action Outreach Ministry',
+                f'A donation was confirmed by PayPal.\n\n'
+                f'Amount: ${amount:.2f} {currency}{freq_label}\n'
+                f'Donor: {donor_name.strip() or "Anonymous"}\n'
+                f'Email: {donor_email or "not provided"}\n'
+                f'Fund: {item_name}\n'
+                f'PayPal Txn: {txn_id}\n'
+            )
+
+        self.send_response(200)
+        self.end_headers()
 
 
 # ── Boot ──────────────────────────────────────────────────────────────────────

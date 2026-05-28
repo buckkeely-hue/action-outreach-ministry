@@ -1191,20 +1191,44 @@ function renderAdminContacts() {
 function renderAdminDonations() {
   var wrap = document.getElementById('admin-donations-list');
   wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
-  fetch('/api/admin/transactions').then(function(r) { return r.json(); }).then(function(items) {
-    if (!Array.isArray(items) || !items.length) {
-      wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No donation records yet.</p>';
-      return;
-    }
-    var total = items.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
-    wrap.innerHTML = '<div style="background:rgba(201,151,58,0.12);border:1px solid rgba(201,151,58,0.3);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#f0c040;font-weight:600;">Total recorded: $' + total.toFixed(2) + ' across ' + items.length + ' transaction' + (items.length === 1 ? '' : 's') + '</div>' +
-      items.slice().reverse().map(function(t) {
-        var date = new Date(t.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  Promise.all([
+    fetch('/api/admin/donations').then(function(r) { return r.json(); }),
+    fetch('/api/admin/transactions').then(function(r) { return r.json(); })
+  ]).then(function(results) {
+    var confirmed = Array.isArray(results[0]) ? results[0] : [];
+    var intents   = Array.isArray(results[1]) ? results[1] : [];
+    var html = '';
+
+    // Confirmed (PayPal IPN verified)
+    var total = confirmed.reduce(function(s, d) { return s + (d.amount || 0); }, 0);
+    html += '<div style="font-size:12px;font-weight:700;color:#86efac;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">✓ Confirmed via PayPal</div>';
+    if (confirmed.length) {
+      html += '<div style="background:rgba(134,239,172,0.1);border:1px solid rgba(134,239,172,0.25);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:14px;color:#86efac;font-weight:600;">$' + total.toFixed(2) + ' confirmed across ' + confirmed.length + ' payment' + (confirmed.length===1?'':'s') + '</div>';
+      html += confirmed.slice().reverse().map(function(d) {
+        var date = new Date(d.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
         return '<div class="admin-item">' +
-          '<div class="admin-item-preview"><strong>$' + (t.amount||0).toFixed(2) + (t.freq==='monthly'?'/mo':'') + '</strong> · ' + escHtml(t.fund||'general') + ' · ' + escHtml(t.processor||'paypal') + '</div>' +
-          '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + date + '</div>' +
-          '</div>';
+          '<div class="admin-item-preview"><strong>$' + (d.amount||0).toFixed(2) + (d.freq==='monthly'?'/mo':'') + '</strong>' +
+          (d.donor_name ? ' · ' + escHtml(d.donor_name) : '') +
+          (d.donor_email ? ' &lt;' + escHtml(d.donor_email) + '&gt;' : '') +
+          ' · ' + escHtml(d.fund||'General Fund') + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + date + '</div></div>';
       }).join('');
+    } else {
+      html += '<p style="font-size:13px;color:rgba(255,255,255,0.35);margin-bottom:14px;">No confirmed PayPal donations yet. Configure IPN in your PayPal account to enable this.</p>';
+    }
+
+    // Intents (user clicked Give button)
+    if (intents.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 8px;">Donation intents (clicked Give)</div>';
+      html += intents.slice().reverse().map(function(t) {
+        var date = new Date(t.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+        return '<div class="admin-item" style="opacity:.7">' +
+          '<div class="admin-item-preview">$' + (t.amount||0).toFixed(2) + (t.freq==='monthly'?'/mo':'') + ' · ' + escHtml(t.fund||'general') + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + date + '</div></div>';
+      }).join('');
+    }
+
+    wrap.innerHTML = html || '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No records yet.</p>';
   }).catch(function() {
     wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load donations.</p>';
   });
