@@ -578,10 +578,30 @@
         <!-- Donations Tab -->
         <div id="admin-tab-donations" class="admin-tab-body" style="display:none;">
 
-          <!-- PayPal Setup Card -->
+          <!-- Payment Method Configuration -->
+          <div class="admin-credentials-card" style="margin-bottom:18px;">
+            <div class="admin-credentials-title">💳 Payment Method Configuration</div>
+
+            <label class="admin-label">PayPal Email <span style="color:#94a3b8;font-weight:400;">(receives online donations)</span></label>
+            <input type="email" id="don-paypal-email" class="custom-input" placeholder="yourchurch@paypal.com">
+
+            <label class="admin-label" style="margin-top:10px;">Cash App Handle</label>
+            <input type="text" id="don-cashapp" class="custom-input" placeholder="$YourHandle">
+
+            <label class="admin-label" style="margin-top:10px;">Venmo Handle</label>
+            <input type="text" id="don-venmo" class="custom-input" placeholder="@YourHandle">
+
+            <label class="admin-label" style="margin-top:10px;">Zelle Phone or Email</label>
+            <input type="text" id="don-zelle" class="custom-input" placeholder="(850) 555-1234 or email@example.com">
+
+            <button class="form-btn" onclick="saveDonationSettings()" style="margin-top:14px;">Save Payment Settings</button>
+            <div id="don-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Payment settings saved.</div>
+          </div>
+
+          <!-- PayPal IPN Setup -->
           <div class="paypal-setup-card">
-            <div class="paypal-setup-title">⚙️ PayPal IPN Setup</div>
-            <p class="paypal-setup-desc">To receive confirmed donation alerts, set this URL in your PayPal account:</p>
+            <div class="paypal-setup-title">⚙️ PayPal IPN — Confirmed Donation Tracking</div>
+            <p class="paypal-setup-desc">Paste this URL into your PayPal account so confirmed donations are logged here automatically:</p>
             <div class="paypal-ipn-url-row">
               <code id="ipn-url-display" class="paypal-ipn-url"></code>
               <button class="form-btn paypal-copy-btn" onclick="copyIpnUrl()">Copy</button>
@@ -590,11 +610,12 @@
               <li>Log in to <strong>paypal.com</strong> → gear icon → <strong>Account Settings</strong></li>
               <li>Left menu: <strong>Notifications → Instant Payment Notifications</strong></li>
               <li>Click <strong>Choose IPN Settings</strong></li>
-              <li>Paste the URL above → select <strong>Receive IPN messages</strong> → Save</li>
+              <li>Paste URL above → select <strong>Receive IPN messages</strong> → Save</li>
             </ol>
-            <a class="paypal-giving-link" href="https://www.paypal.com/us/webapps/mpp/givingfund" target="_blank" rel="noopener">Apply for PayPal Giving Fund (0% fees for verified nonprofits) →</a>
+            <a class="paypal-giving-link" href="https://www.paypal.com/us/webapps/mpp/givingfund" target="_blank" rel="noopener">Apply for PayPal Giving Fund — 0% fees for verified nonprofits →</a>
           </div>
 
+          <!-- Confirmed Donations List -->
           <div id="admin-donations-list"><p style="color:#94a3b8;font-size:13px;">Loading…</p></div>
         </div>
 

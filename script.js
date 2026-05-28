@@ -1359,6 +1359,35 @@ function createAomUser() {
 function populateDonationsSetup() {
   var el = document.getElementById('ipn-url-display');
   if (el) el.textContent = window.location.origin + '/api/paypal/ipn';
+  var st = CONTENT.settings || {};
+  var pe = document.getElementById('don-paypal-email');
+  var ca = document.getElementById('don-cashapp');
+  var ve = document.getElementById('don-venmo');
+  var ze = document.getElementById('don-zelle');
+  if (pe) pe.value = st.paypalEmail || '';
+  if (ca) ca.value = st.cashapp     || '';
+  if (ve) ve.value = st.venmo       || '';
+  if (ze) ze.value = st.zelle       || '';
+}
+
+function saveDonationSettings() {
+  var settings = Object.assign({}, CONTENT.settings || {}, {
+    paypalEmail: document.getElementById('don-paypal-email').value.trim(),
+    cashapp:     document.getElementById('don-cashapp').value.trim(),
+    venmo:       document.getElementById('don-venmo').value.trim(),
+    zelle:       document.getElementById('don-zelle').value.trim(),
+  });
+  fetch('/api/admin/content', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({settings: settings})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.settings = settings;
+      renderAllQRs();
+      showSaveOk('don-save-ok');
+    }
+  });
 }
 
 function copyIpnUrl() {
