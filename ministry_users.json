@@ -1,0 +1,9 @@
+{
+  "admin": {
+    "salt": "58feb3b4a51610b130e93c3cbb17fbef",
+    "hash": "1c9b17e34475948f9b05f4a30e6151cd250d6e08b48ed8fa3ac6d21d7b2fa539",
+    "is_admin": true,
+    "contact_email": "",
+    "created": 1779917493
+  }
+}
