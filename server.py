@@ -64,6 +64,7 @@ CONTENT_DEFAULTS = {
         'contactEmail': 'info@actionoutreachministry.com',
         'hours': '',
         'notifyEmail': '',
+        'ntfyTopic': 'aom-5b0888c03c48',
         'paypalEmail': '',
         'cashapp': '',
         'venmo': '',
@@ -150,6 +151,25 @@ def _notify_email():
     if not email:
         email = _load_smtp().get('username', '')
     return email
+
+def _ntfy_topic():
+    content = _load_json(CONTENT_FILE, {})
+    return content.get('settings', {}).get('ntfyTopic', '')
+
+def _push(title, message, tags='bell'):
+    topic = _ntfy_topic()
+    if not topic:
+        return
+    try:
+        req = urllib.request.Request(
+            f'https://ntfy.sh/{topic}',
+            data=message.encode(),
+            headers={'Title': title, 'Tags': tags, 'Priority': 'default'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=8)
+    except Exception:
+        pass
 
 def _seed_content():
     if not CONTENT_FILE.exists():
@@ -500,6 +520,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         pending = _load_pending()
         pending['testimonies'].insert(0, entry)
         _save_pending(pending)
+        _push(f'New Testimony — {name}', quote[:200], tags='scroll')
         try:
             cfg    = _load_smtp()
             notify = _notify_email()
@@ -529,6 +550,8 @@ class AOMHandler(BaseHTTPRequestHandler):
         pending = _load_pending()
         pending['prayers'].insert(0, entry)
         _save_pending(pending)
+        urgency = 'urgent' if urgent else 'pray'
+        _push(f'{"URGENT " if urgent else ""}Prayer Request — {name}', text[:200], tags=urgency)
         try:
             cfg    = _load_smtp()
             notify = _notify_email()
@@ -804,6 +827,7 @@ class AOMHandler(BaseHTTPRequestHandler):
             f'Message:\n{message}\n\n'
             f'Sent: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
         )
+        _push(f'Contact: {subject}', f'From {name} <{email}>\n{message[:150]}', tags='email')
         try:
             notify = _notify_email()
             if notify:
@@ -849,6 +873,7 @@ class AOMHandler(BaseHTTPRequestHandler):
             f'Comments:\n  {comments or "(none)"}\n\n'
             f'Submitted: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
         )
+        _push(f'Info Request — {entry["name"]}', f'{entry["address"]}\n{", ".join(interests) if interests else "General info"}', tags='mailbox')
         try:
             notify = _notify_email()
             if notify:
