@@ -177,7 +177,48 @@ def _seed_content():
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
+def _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text):
+    import base64
+    from email.mime.text import MIMEText as _MIMEText
+    client_id     = smtp_cfg.get('gmail_client_id', '')
+    client_secret = smtp_cfg.get('gmail_client_secret', '')
+    refresh_token = smtp_cfg.get('gmail_refresh_token', '')
+    send_as       = smtp_cfg.get('gmail_send_as', '')
+    if not (client_id and client_secret and refresh_token):
+        raise ValueError('Gmail API credentials not configured')
+    # Refresh access token
+    payload = json.dumps({
+        'client_id': client_id, 'client_secret': client_secret,
+        'refresh_token': refresh_token, 'grant_type': 'refresh_token'
+    }).encode()
+    req = urllib.request.Request('https://oauth2.googleapis.com/token',
+        data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        access_token = json.load(r)['access_token']
+    # Build message
+    from_name = smtp_cfg.get('from_name', 'Action Outreach Ministry')
+    msg = MIMEMultipart()
+    msg['From']    = f'{from_name} <{send_as}>' if send_as else send_as
+    msg['To']      = to_addr
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body_text, 'plain'))
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    send_req = urllib.request.Request(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        data=json.dumps({'raw': raw}).encode(),
+        headers={'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(send_req, timeout=15) as r:
+            pass
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f'Gmail API error {e.code}: {e.reason}')
+
 def _send_email(smtp_cfg, to_addr, subject, body_text):
+    if smtp_cfg.get('gmail_refresh_token'):
+        _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text)
+        return
     from_name  = smtp_cfg.get('from_name', 'Action Outreach Ministry')
     from_email = smtp_cfg.get('username', '')
     brevo_key  = smtp_cfg.get('brevo_api_key', '')
