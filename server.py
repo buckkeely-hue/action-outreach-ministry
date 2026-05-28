@@ -96,6 +96,13 @@ CONTENT_DEFAULTS = {
         {'month': 'JUN', 'day': '7', 'title': 'Revival Night', 'meta': '6:00 PM · Main Sanctuary · Free', 'text': 'A night of worship, testimonies, and the Word. Come expectant — God moves powerfully when His people gather.'},
         {'month': 'JUN', 'day': '21', 'title': 'Youth Summer Kickoff', 'meta': '11:00 AM · Ministry Grounds · Free', 'text': 'Games, food, and a powerful message for our youth. Bring the whole family.'},
     ],
+    'newsletter': {
+        'title':   'Ministry Newsletter',
+        'issue':   'Spring 2026',
+        'date':    'May 2026',
+        'visible': False,
+        'body':    '<p>Welcome to the Action Outreach Ministry newsletter. Edit this content in the Admin panel under the <strong>Newsletter</strong> tab.</p>',
+    },
     'prayerHeroTitle': 'Urgent Prayer Requests',
     'prayerHeroText': 'We believe in the power of prayer. Submit your request and our prayer team will stand in agreement with you.',
     'prayers': [
