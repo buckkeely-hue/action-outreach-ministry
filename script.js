@@ -142,6 +142,7 @@ function applyContent() {
 
   // Update page title
   document.title = name;
+  _applyNewsletterNavVisibility();
 }
 
 function renderCards() {
@@ -202,6 +203,33 @@ function switchTab(id) {
 document.querySelectorAll('.nav-tab').forEach(function(btn) {
   btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
 });
+
+// ---- Newsletter Modal ----
+function openNewsletter() {
+  var nl = CONTENT.newsletter || {};
+  if (!nl.visible && !currentAdminUser) return;
+  setEl('nl-title', nl.title || 'Ministry Newsletter');
+  var issueEl = document.getElementById('nl-issue');
+  var dateEl  = document.getElementById('nl-date');
+  if (issueEl) issueEl.textContent = nl.issue || '';
+  if (dateEl)  dateEl.textContent  = nl.date  || '';
+  var bodyEl = document.getElementById('nl-body');
+  if (bodyEl) bodyEl.innerHTML = nl.body || '<p>Newsletter content coming soon.</p>';
+  document.getElementById('newsletter-overlay').style.display = 'flex';
+}
+function closeNewsletter() {
+  document.getElementById('newsletter-overlay').style.display = 'none';
+}
+document.getElementById('newsletter-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeNewsletter();
+});
+
+function _applyNewsletterNavVisibility() {
+  var btn = document.getElementById('nav-newsletter');
+  if (!btn) return;
+  var nl = CONTENT.newsletter || {};
+  btn.style.display = (nl.visible || currentAdminUser) ? '' : 'none';
+}
 
 // ---- Contact Info Modal ----
 function openContactInfo() {
@@ -714,6 +742,7 @@ function adminTab(name) {
   if (name === 'testimonies') { renderAdminTestimonies(); loadAdminPendingTestimonies(); }
   if (name === 'events')      { renderAdminEvents(); }
   if (name === 'prayer')      { renderAdminPrayers(); loadAdminPendingPrayers(); }
+  if (name === 'newsletter')  { populateNewsletterTab(); }
   if (name === 'contacts')    { renderAdminContacts(); }
   if (name === 'donations')   { renderAdminDonations(); }
   if (name === 'users')       { renderAdminUsers(); }
@@ -1326,7 +1355,57 @@ function createAomUser() {
   });
 }
 
+// ---- Newsletter Admin Tab ----
+function populateNewsletterTab() {
+  var nl = CONTENT.newsletter || {};
+  var vis = document.getElementById('nl-admin-visible');
+  var tit = document.getElementById('nl-admin-title');
+  var iss = document.getElementById('nl-admin-issue');
+  var dat = document.getElementById('nl-admin-date');
+  var bod = document.getElementById('nl-admin-body');
+  if (vis) vis.checked = !!nl.visible;
+  if (tit) tit.value   = nl.title || '';
+  if (iss) iss.value   = nl.issue || '';
+  if (dat) dat.value   = nl.date  || '';
+  if (bod) bod.value   = nl.body  || '';
+}
+
+function saveNewsletter() {
+  var nl = {
+    visible: document.getElementById('nl-admin-visible').checked,
+    title:   document.getElementById('nl-admin-title').value.trim(),
+    issue:   document.getElementById('nl-admin-issue').value.trim(),
+    date:    document.getElementById('nl-admin-date').value.trim(),
+    body:    document.getElementById('nl-admin-body').value,
+  };
+  fetch('/api/admin/content', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({newsletter: nl})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      CONTENT.newsletter = nl;
+      _applyNewsletterNavVisibility();
+      showSaveOk('nl-save-ok');
+    }
+  }).catch(function() {});
+}
+
+function previewNewsletter() {
+  var nl = {
+    visible: true,
+    title:   document.getElementById('nl-admin-title').value.trim() || 'Ministry Newsletter',
+    issue:   document.getElementById('nl-admin-issue').value.trim(),
+    date:    document.getElementById('nl-admin-date').value.trim(),
+    body:    document.getElementById('nl-admin-body').value,
+  };
+  var saved = CONTENT.newsletter;
+  CONTENT.newsletter = nl;
+  openNewsletter();
+  CONTENT.newsletter = saved;
+}
+
 // ---- Keyboard ----
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') { closeDonation(); closeAdmin(); closeContactInfo(); }
+  if (e.key === 'Escape') { closeDonation(); closeAdmin(); closeContactInfo(); closeNewsletter(); }
 });
