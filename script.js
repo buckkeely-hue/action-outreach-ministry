@@ -262,8 +262,8 @@ var currentPayMethod = 'paypal';
 function openDonation() {
   document.getElementById('donation-overlay').style.display = 'flex';
   document.getElementById('donation-error').style.display = 'none';
-  setPayMethod('paypal');
   updateGiveBtn();
+  renderAllQRs();
 }
 function closeDonation() {
   document.getElementById('donation-overlay').style.display = 'none';
@@ -308,63 +308,41 @@ function updateGiveBtn() {
   btn.textContent = 'Give ' + amt + freq + ' Now';
 }
 
-function setPayMethod(method) {
-  currentPayMethod = method;
-  ['paypal','cashapp','venmo','zelle'].forEach(function(m) {
-    var tab = document.getElementById('pm-tab-' + m);
-    if (tab) tab.classList.toggle('active', m === method);
-  });
-  var paypalContent = document.getElementById('pm-paypal-content');
-  var qrContent     = document.getElementById('pm-qr-content');
-  if (method === 'paypal') {
-    paypalContent.style.display = 'block';
-    qrContent.style.display     = 'none';
-  } else {
-    paypalContent.style.display = 'none';
-    qrContent.style.display     = 'block';
-    renderQR(method);
-  }
+function renderAllQRs() {
+  var methods = [
+    { key: 'cashapp', label: 'Cash App', color: '#00d632' },
+    { key: 'venmo',   label: 'Venmo',    color: '#3d95ce' },
+    { key: 'zelle',   label: 'Zelle',    color: '#6d1ed4' },
+    { key: 'paypal',  label: 'PayPal',   color: '#009cde' },
+  ];
+  var grid = document.getElementById('qr-grid-all');
+  if (!grid) return;
+  grid.innerHTML = methods.map(function(m) {
+    var handle = m.key === 'paypal' ? s('paypalEmail') : s(m.key);
+    if (!handle) {
+      return '<div class="qr-cell qr-cell-empty"><div class="qr-cell-label" style="color:' + m.color + '">' + m.label + '</div><p class="qr-not-set">Not configured</p></div>';
+    }
+    var qrUrl = _qrUrl(m.key, handle);
+    var display = _qrHandle(m.key, handle);
+    return '<div class="qr-cell">' +
+      '<div class="qr-cell-label" style="color:' + m.color + '">' + m.label + '</div>' +
+      '<img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=6&data=' + encodeURIComponent(qrUrl) + '" class="qr-cell-img" alt="' + m.label + ' QR">' +
+      '<div class="qr-cell-handle">' + escHtml(display) + '</div>' +
+      '</div>';
+  }).join('');
 }
 
-function renderQR(method) {
-  var handle = s(method);
-  var notConf = document.getElementById('qr-not-configured');
-  var qrImg   = document.getElementById('qr-img');
-  var qrHandle = document.getElementById('qr-handle');
-  var qrInstr  = document.getElementById('qr-instructions');
+function _qrUrl(method, handle) {
+  if (method === 'cashapp') return 'https://cash.app/' + (handle.startsWith('$') ? handle : '$' + handle);
+  if (method === 'venmo')   return 'https://venmo.com/' + (handle.startsWith('@') ? handle.slice(1) : handle);
+  if (method === 'paypal')  return 'https://www.paypal.com/donate?business=' + encodeURIComponent(handle);
+  return handle;
+}
 
-  if (!handle) {
-    notConf.style.display = 'block';
-    qrImg.style.display   = 'none';
-    qrHandle.textContent  = '';
-    qrInstr.textContent   = '';
-    return;
-  }
-  notConf.style.display = 'none';
-  qrImg.style.display   = 'block';
-
-  var qrData, displayHandle, instructions;
-  if (method === 'cashapp') {
-    var cleanHandle = handle.startsWith('$') ? handle : '$' + handle;
-    qrData = 'https://cash.app/' + encodeURIComponent(cleanHandle);
-    displayHandle = cleanHandle;
-    instructions  = 'Open CashApp and scan, or tap the handle above';
-  } else if (method === 'venmo') {
-    var venmoHandle = handle.startsWith('@') ? handle.slice(1) : handle;
-    qrData = 'https://venmo.com/' + encodeURIComponent(venmoHandle);
-    displayHandle = '@' + venmoHandle;
-    instructions  = 'Open Venmo and scan, or search for the handle above';
-  } else {
-    qrData = handle;
-    displayHandle = handle;
-    instructions  = 'Open your Zelle app and send to the number/email above';
-  }
-
-  var size = 220;
-  qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(qrData) + '&size=' + size + 'x' + size + '&margin=10&color=0d1b2a';
-  qrImg.alt = method + ' QR Code';
-  qrHandle.textContent  = displayHandle;
-  qrInstr.textContent   = instructions;
+function _qrHandle(method, handle) {
+  if (method === 'cashapp') return handle.startsWith('$') ? handle : '$' + handle;
+  if (method === 'venmo')   return handle.startsWith('@') ? handle : '@' + handle;
+  return handle;
 }
 
 function processDonation() {

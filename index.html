@@ -257,13 +257,10 @@
       <h2>Give to Action Outreach Ministry</h2>
       <p class="modal-sub">Your generosity fuels the Gospel. 100% of donations support our mission.</p>
 
-      <!-- Payment Method Tabs -->
-      <div class="pm-tabs">
-        <button class="pm-tab active" id="pm-tab-paypal" onclick="setPayMethod('paypal')">PayPal</button>
-        <button class="pm-tab" id="pm-tab-cashapp" onclick="setPayMethod('cashapp')">CashApp</button>
-        <button class="pm-tab" id="pm-tab-venmo" onclick="setPayMethod('venmo')">Venmo</button>
-        <button class="pm-tab" id="pm-tab-zelle" onclick="setPayMethod('zelle')">Zelle</button>
-      </div>
+      <!-- Scan-to-Give QR Grid -->
+      <div class="qr-grid-all" id="qr-grid-all"></div>
+
+      <div class="give-divider"><span>— or give online via PayPal —</span></div>
 
       <!-- PayPal donation form -->
       <div id="pm-paypal-content">
@@ -300,17 +297,7 @@
         <div id="donation-error" class="donation-error" style="display:none;"></div>
       </div>
 
-      <!-- QR Code content (CashApp / Venmo / Zelle) -->
-      <div id="pm-qr-content" style="display:none;">
-        <div class="qr-wrap">
-          <img id="qr-img" src="" alt="QR Code" class="qr-img">
-          <div class="qr-handle" id="qr-handle"></div>
-          <div class="qr-instructions" id="qr-instructions"></div>
-        </div>
-        <div id="qr-not-configured" style="display:none;" class="qr-not-configured">
-          This payment method has not been configured yet. Please contact us directly or use PayPal.
-        </div>
-      </div>
+      <a class="paypal-giving-link" href="https://www.paypal.com/us/webapps/mpp/givingfund" target="_blank" rel="noopener">Apply for PayPal Giving Fund — 0% fees for verified nonprofits →</a>
     </div>
   </div>
 
