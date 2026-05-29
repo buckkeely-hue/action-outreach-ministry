@@ -215,6 +215,7 @@ function openNewsletter() {
   if (dateEl)  dateEl.textContent  = nl.date  || '';
   var bodyEl = document.getElementById('nl-body');
   if (bodyEl) bodyEl.innerHTML = nl.body || '<p>Newsletter content coming soon.</p>';
+  renderNewsletterAttachments(nl.files || []);
   document.getElementById('newsletter-overlay').style.display = 'flex';
 }
 function closeNewsletter() {
@@ -1478,6 +1479,104 @@ function copyIpnUrl() {
   });
 }
 
+// ---- Newsletter File Uploads ----
+
+function renderNewsletterAdminFiles(files) {
+  var el = document.getElementById('nl-admin-file-list');
+  if (!el) return;
+  if (!files || !files.length) { el.innerHTML = ''; return; }
+  el.innerHTML = files.map(function(f) {
+    var icon = FILE_TYPE_ICONS[f.type] || '📎';
+    var size = f.size ? ' <span class="cfi-size">(' + (f.size < 1024*1024
+      ? Math.round(f.size/1024) + ' KB'
+      : (f.size/1024/1024).toFixed(1) + ' MB') + ')</span>' : '';
+    return '<div class="card-file-item">'
+      + '<span class="cfi-icon">' + icon + '</span>'
+      + '<a class="cfi-name" href="' + escHtml(f.url) + '" target="_blank">' + escHtml(f.name) + '</a>'
+      + size
+      + '<span class="cfi-type">' + escHtml(f.type.toUpperCase()) + '</span>'
+      + '<button class="cfi-del" onclick="deleteNewsletterFile(\'' + escHtml(f.name) + '\')" title="Remove">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+function renderNewsletterAttachments(files) {
+  var el = document.getElementById('nl-attachments');
+  if (!el) return;
+  if (!files || !files.length) { el.innerHTML = ''; return; }
+  var html = '<div class="nl-attachments-section"><h4 class="nl-attach-heading">📎 Attachments</h4>';
+  files.forEach(function(f) {
+    var type = f.type || '';
+    if (type === 'jpg' || type === 'jpeg' || type === 'png' || type === 'gif') {
+      html += '<div class="nl-attach-item nl-attach-image">'
+        + '<img src="' + escHtml(f.url) + '" alt="' + escHtml(f.name) + '" class="nl-attach-img">'
+        + '<div class="nl-attach-caption">' + escHtml(f.name) + '</div>'
+        + '</div>';
+    } else if (type === 'mp3') {
+      html += '<div class="nl-attach-item">'
+        + '<div class="nl-attach-label">🎵 ' + escHtml(f.name) + '</div>'
+        + '<audio controls class="nl-audio" src="' + escHtml(f.url) + '"></audio>'
+        + '</div>';
+    } else {
+      var icon = FILE_TYPE_ICONS[type] || '📎';
+      html += '<div class="nl-attach-item">'
+        + '<a class="nl-attach-download" href="' + escHtml(f.url) + '" target="_blank" download>'
+        + icon + ' ' + escHtml(f.name) + ' <span class="nl-attach-dl-label">Download</span>'
+        + '</a>'
+        + '</div>';
+    }
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function uploadNewsletterFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var status = document.getElementById('nl-upload-status');
+  status.textContent = 'Uploading…';
+  status.style.color = '#94a3b8';
+  var fd = new FormData();
+  fd.append('file', file);
+  fetch('/api/admin/upload-newsletter-file', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        var nl = CONTENT.newsletter = CONTENT.newsletter || {};
+        nl.files = nl.files || [];
+        nl.files = nl.files.filter(function(f) { return f.name !== d.name; });
+        nl.files.push({ name: d.name, url: d.url, type: d.type, size: d.size });
+        renderNewsletterAdminFiles(nl.files);
+        status.textContent = '✓ ' + d.name + ' uploaded';
+        status.style.color = '#86efac';
+        setTimeout(function() { status.textContent = ''; }, 3000);
+      } else {
+        status.textContent = d.error || 'Upload failed';
+        status.style.color = '#f87171';
+      }
+    })
+    .catch(function() {
+      status.textContent = 'Upload failed — server error';
+      status.style.color = '#f87171';
+    });
+  input.value = '';
+}
+
+function deleteNewsletterFile(filename) {
+  if (!confirm('Remove "' + filename + '" from the newsletter?')) return;
+  fetch('/api/admin/delete-newsletter-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: filename })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      var nl = CONTENT.newsletter = CONTENT.newsletter || {};
+      nl.files = (nl.files || []).filter(function(f) { return f.name !== filename; });
+      renderNewsletterAdminFiles(nl.files);
+    }
+  });
+}
+
 // ---- Newsletter Admin Tab ----
 function populateNewsletterTab() {
   var nl = CONTENT.newsletter || {};
@@ -1491,6 +1590,7 @@ function populateNewsletterTab() {
   if (iss) iss.value   = nl.issue || '';
   if (dat) dat.value   = nl.date  || '';
   if (bod) bod.value   = nl.body  || '';
+  renderNewsletterAdminFiles(nl.files || []);
 }
 
 function saveNewsletter() {
@@ -1500,6 +1600,7 @@ function saveNewsletter() {
     issue:   document.getElementById('nl-admin-issue').value.trim(),
     date:    document.getElementById('nl-admin-date').value.trim(),
     body:    document.getElementById('nl-admin-body').value,
+    files:   (CONTENT.newsletter || {}).files || [],
   };
   fetch('/api/admin/content', {
     method: 'POST',

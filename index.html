@@ -218,6 +218,7 @@
         <div class="newsletter-divider"></div>
       </div>
       <div id="nl-body" class="newsletter-body"></div>
+      <div id="nl-attachments"></div>
       <div class="newsletter-footer">
         <button class="form-btn" onclick="closeNewsletter();switchTab('contact');" style="background:var(--gold);color:var(--navy);width:100%;margin-top:20px;">Contact Us →</button>
       </div>
@@ -581,6 +582,17 @@
 
           <label class="admin-label" style="margin-top:12px;">Body Content <span style="color:#94a3b8;font-size:11px;">(HTML supported — use &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;h3&gt;, &lt;ul&gt;&lt;li&gt;)</span></label>
           <textarea id="nl-admin-body" class="custom-input" rows="14" placeholder="<p>Write your newsletter content here...</p>"></textarea>
+
+          <div class="nl-files-admin-section">
+            <label class="admin-label" style="margin-bottom:6px;">Attachments &amp; Media</label>
+            <p style="font-size:11px;color:#64748b;margin:0 0 8px;">Uploaded files appear at the bottom of the newsletter for visitors to view or download. Images display inline; audio plays in-browser; PDFs and docs are download links.</p>
+            <div id="nl-admin-file-list"></div>
+            <label class="card-upload-btn" style="margin-top:6px;">
+              + Attach File
+              <input type="file" accept=".jpg,.jpeg,.png,.gif,.mp3,.pdf,.doc,.docx" style="display:none;" onchange="uploadNewsletterFile(this)">
+            </label>
+            <div class="card-upload-status" id="nl-upload-status"></div>
+          </div>
 
           <div style="display:flex;gap:8px;margin-top:14px;align-items:center;">
             <button class="form-btn" onclick="saveNewsletter()">Save Newsletter</button>

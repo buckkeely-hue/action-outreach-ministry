@@ -477,8 +477,10 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/auth/request-reset':        self._api_request_reset,
             '/api/auth/reset-confirm':        self._api_reset_confirm,
             '/api/admin/content':             self._api_save_content,
-            '/api/admin/upload-card-file':    self._api_upload_card_file,
-            '/api/admin/delete-card-file':    self._api_delete_card_file,
+            '/api/admin/upload-card-file':       self._api_upload_card_file,
+            '/api/admin/delete-card-file':       self._api_delete_card_file,
+            '/api/admin/upload-newsletter-file': self._api_upload_newsletter_file,
+            '/api/admin/delete-newsletter-file': self._api_delete_newsletter_file,
             '/api/admin/create-user':         self._api_create_user,
             '/api/admin/delete-user':         self._api_delete_user,
             '/api/admin/set-password':        self._api_set_password,
@@ -621,6 +623,56 @@ class AOMHandler(BaseHTTPRequestHandler):
             content['cards'] = cards
             _save_json(CONTENT_FILE, content)
         self._json({'ok': True, 'url': url, 'name': safe, 'type': ext.lstrip('.'), 'size': len(data)})
+
+    def _api_upload_newsletter_file(self):
+        if not self._require_admin():
+            return
+        ct = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in ct:
+            return self._err('Expected multipart/form-data', 400)
+        length = int(self.headers.get('Content-Length', 0))
+        if length > MAX_UPLOAD_BYTES:
+            return self._err('File too large (max 20 MB)', 400)
+        env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
+        if 'file' not in form:
+            return self._err('No file in request', 400)
+        fld = form['file']
+        ext = Path(fld.filename or '').suffix.lower()
+        if ext not in ALLOWED_UPLOAD_EXTS:
+            return self._err('File type not allowed. Accepted: jpg, png, gif, mp3, pdf, doc, docx', 400)
+        safe = _safe_filename(fld.filename)
+        upload_dir = UPLOADS_DIR / 'newsletter'
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        data = fld.file.read()
+        (upload_dir / safe).write_bytes(data)
+        url = '/uploads/newsletter/' + safe
+        content = _load_content()
+        nl = content.setdefault('newsletter', {})
+        nl.setdefault('files', [])
+        nl['files'] = [f for f in nl['files'] if f['name'] != safe]
+        nl['files'].append({'name': safe, 'url': url, 'type': ext.lstrip('.'), 'size': len(data)})
+        _save_json(CONTENT_FILE, content)
+        self._json({'ok': True, 'url': url, 'name': safe, 'type': ext.lstrip('.'), 'size': len(data)})
+
+    def _api_delete_newsletter_file(self):
+        if not self._require_admin():
+            return
+        b = self._body()
+        filename = str(b.get('filename', '')).strip()
+        if not filename:
+            return self._err('Missing filename', 400)
+        safe = _safe_filename(filename)
+        if safe != filename:
+            return self._err('Invalid filename', 400)
+        fp = UPLOADS_DIR / 'newsletter' / safe
+        if fp.exists() and fp.is_file():
+            fp.unlink()
+        content = _load_content()
+        nl = content.setdefault('newsletter', {})
+        nl['files'] = [f for f in nl.get('files', []) if f['name'] != safe]
+        _save_json(CONTENT_FILE, content)
+        self._json({'ok': True})
 
     def _api_delete_card_file(self):
         if not self._require_admin():
