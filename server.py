@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Action Outreach Ministry — standalone web server. No pip dependencies."""
 
-import hashlib, hmac, json, os, secrets, smtplib, socket, threading, time
+import cgi, hashlib, hmac, json, os, re, secrets, smtplib, socket, threading, time
 import urllib.error, urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -33,6 +33,10 @@ INFO_REQUESTS_FILE = BASE_DIR / 'info_requests.json'
 CONTENT_FILE       = BASE_DIR / 'ministry_content.json'
 PENDING_FILE       = BASE_DIR / 'ministry_pending.json'
 CONTACTS_FILE      = BASE_DIR / 'contacts.json'
+UPLOADS_DIR        = BASE_DIR / 'uploads'
+
+ALLOWED_UPLOAD_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.mp3', '.pdf', '.doc', '.docx'}
+MAX_UPLOAD_BYTES    = 20 * 1024 * 1024   # 20 MB
 
 ADMIN_RECOVERY_CODE = 'outreach2024reset'
 
@@ -50,10 +54,20 @@ MIME_TYPES = {
     '.png':  'image/png',
     '.jpg':  'image/jpeg',
     '.jpeg': 'image/jpeg',
+    '.gif':  'image/gif',
     '.ico':  'image/x-icon',
     '.svg':  'image/svg+xml',
     '.txt':  'text/plain',
+    '.mp3':  'audio/mpeg',
+    '.pdf':  'application/pdf',
+    '.doc':  'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
+
+def _safe_filename(name):
+    name = Path(name).name
+    name = re.sub(r'[^\w.\-]', '_', name)
+    return name[:120] or 'upload'
 
 CONTENT_DEFAULTS = {
     'settings': {
@@ -428,7 +442,12 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_admin_donations()
 
         # Static file
-        file_path = BASE_DIR / path.lstrip('/')
+        file_path = (BASE_DIR / path.lstrip('/')).resolve()
+        # Prevent path traversal outside BASE_DIR
+        try:
+            file_path.relative_to(BASE_DIR.resolve())
+        except ValueError:
+            file_path = BASE_DIR / 'index.html'
         if file_path.is_dir():
             file_path = file_path / 'index.html'
         if not file_path.exists() or not file_path.is_file():
@@ -439,6 +458,11 @@ class AOMHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(data)))
+        # No caching for HTML/JS/CSS — always serve fresh
+        if file_path.suffix.lower() in ('.html', '.js', '.css'):
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
         self.end_headers()
         self.wfile.write(data)
 
@@ -453,6 +477,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/auth/request-reset':        self._api_request_reset,
             '/api/auth/reset-confirm':        self._api_reset_confirm,
             '/api/admin/content':             self._api_save_content,
+            '/api/admin/upload-card-file':    self._api_upload_card_file,
+            '/api/admin/delete-card-file':    self._api_delete_card_file,
             '/api/admin/create-user':         self._api_create_user,
             '/api/admin/delete-user':         self._api_delete_user,
             '/api/admin/set-password':        self._api_set_password,
@@ -553,6 +579,70 @@ class AOMHandler(BaseHTTPRequestHandler):
             del b['settings']
         content.update(b)
         _save_json(CONTENT_FILE, content)
+        self._json({'ok': True})
+
+    # ── Card file upload / delete ─────────────────────────────────────────────
+
+    def _api_upload_card_file(self):
+        if not self._require_admin():
+            return
+        ct = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in ct:
+            return self._err('Expected multipart/form-data', 400)
+        length = int(self.headers.get('Content-Length', 0))
+        if length > MAX_UPLOAD_BYTES:
+            return self._err('File too large (max 20 MB)', 400)
+        env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
+        card_idx = form.getvalue('card_index', '').strip()
+        if not card_idx.isdigit():
+            return self._err('Invalid card_index', 400)
+        if 'file' not in form:
+            return self._err('No file in request', 400)
+        fld = form['file']
+        ext = Path(fld.filename or '').suffix.lower()
+        if ext not in ALLOWED_UPLOAD_EXTS:
+            return self._err('File type not allowed. Accepted: jpg, png, gif, mp3, pdf, doc, docx', 400)
+        safe = _safe_filename(fld.filename)
+        upload_dir = UPLOADS_DIR / 'cards' / card_idx
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        data = fld.file.read()
+        (upload_dir / safe).write_bytes(data)
+        url = '/uploads/cards/{}/{}'.format(card_idx, safe)
+        content = _load_content()
+        cards = content.get('cards', [])
+        idx = int(card_idx)
+        if 0 <= idx < len(cards):
+            cards[idx].setdefault('files', [])
+            # replace if same name already exists
+            cards[idx]['files'] = [f for f in cards[idx]['files'] if f['name'] != safe]
+            cards[idx]['files'].append({'name': safe, 'url': url,
+                                        'type': ext.lstrip('.'), 'size': len(data)})
+            content['cards'] = cards
+            _save_json(CONTENT_FILE, content)
+        self._json({'ok': True, 'url': url, 'name': safe, 'type': ext.lstrip('.'), 'size': len(data)})
+
+    def _api_delete_card_file(self):
+        if not self._require_admin():
+            return
+        b = self._body()
+        card_idx = str(b.get('card_index', '')).strip()
+        filename = str(b.get('filename', '')).strip()
+        if not card_idx.isdigit() or not filename:
+            return self._err('Invalid parameters', 400)
+        safe = _safe_filename(filename)
+        if safe != filename:
+            return self._err('Invalid filename', 400)
+        fp = UPLOADS_DIR / 'cards' / card_idx / safe
+        if fp.exists() and fp.is_file():
+            fp.unlink()
+        content = _load_content()
+        cards = content.get('cards', [])
+        idx = int(card_idx)
+        if 0 <= idx < len(cards):
+            cards[idx]['files'] = [f for f in cards[idx].get('files', []) if f['name'] != safe]
+            content['cards'] = cards
+            _save_json(CONTENT_FILE, content)
         self._json({'ok': True})
 
     # ── Testimony / Prayer submissions (public) ───────────────────────────────

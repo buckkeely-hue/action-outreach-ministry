@@ -816,6 +816,7 @@ function populateContentTab() {
       document.getElementById('ct-card-icon-' + i).value  = c.icon  || '';
       document.getElementById('ct-card-title-' + i).value = c.title || '';
       document.getElementById('ct-card-text-' + i).value  = c.text  || '';
+      renderCardFiles(i, c.files || []);
     }
   });
 }
@@ -853,6 +854,85 @@ function saveContentTab() {
       showSaveOk('ct-save-ok');
     }
   }).catch(function() {});
+}
+
+// ---- Card File Uploads ----
+
+var FILE_TYPE_ICONS = {
+  jpg: '🖼', jpeg: '🖼', png: '🖼', gif: '🖼',
+  mp3: '🎵',
+  pdf: '📄',
+  doc: '📝', docx: '📝',
+};
+
+function renderCardFiles(cardIdx, files) {
+  var el = document.getElementById('ct-card-files-' + cardIdx);
+  if (!el) return;
+  if (!files || !files.length) { el.innerHTML = ''; return; }
+  el.innerHTML = files.map(function(f) {
+    var icon = FILE_TYPE_ICONS[f.type] || '📎';
+    var size = f.size ? ' <span class="cfi-size">(' + (f.size < 1024*1024
+      ? Math.round(f.size/1024) + ' KB'
+      : (f.size/1024/1024).toFixed(1) + ' MB') + ')</span>' : '';
+    return '<div class="card-file-item">'
+      + '<span class="cfi-icon">' + icon + '</span>'
+      + '<a class="cfi-name" href="' + escHtml(f.url) + '" target="_blank">' + escHtml(f.name) + '</a>'
+      + size
+      + '<span class="cfi-type">' + escHtml(f.type.toUpperCase()) + '</span>'
+      + '<button class="cfi-del" onclick="deleteCardFile(' + cardIdx + ',\'' + escHtml(f.name) + '\')" title="Remove">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+function uploadCardFile(cardIdx, input) {
+  var file = input.files[0];
+  if (!file) return;
+  var status = document.getElementById('ct-card-upload-status-' + cardIdx);
+  status.textContent = 'Uploading…';
+  status.style.color = '#94a3b8';
+  var fd = new FormData();
+  fd.append('card_index', String(cardIdx));
+  fd.append('file', file);
+  fetch('/api/admin/upload-card-file', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        var cards = CONTENT.cards || [];
+        if (!cards[cardIdx]) return;
+        cards[cardIdx].files = cards[cardIdx].files || [];
+        cards[cardIdx].files = cards[cardIdx].files.filter(function(f) { return f.name !== d.name; });
+        cards[cardIdx].files.push({ name: d.name, url: d.url, type: d.type, size: d.size });
+        renderCardFiles(cardIdx, cards[cardIdx].files);
+        status.textContent = '✓ ' + d.name + ' uploaded';
+        status.style.color = '#86efac';
+        setTimeout(function() { status.textContent = ''; }, 3000);
+      } else {
+        status.textContent = d.error || 'Upload failed';
+        status.style.color = '#f87171';
+      }
+    })
+    .catch(function() {
+      status.textContent = 'Upload failed — server error';
+      status.style.color = '#f87171';
+    });
+  input.value = '';
+}
+
+function deleteCardFile(cardIdx, filename) {
+  if (!confirm('Remove "' + filename + '" from this card?')) return;
+  fetch('/api/admin/delete-card-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_index: cardIdx, filename: filename })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      var cards = CONTENT.cards || [];
+      if (cards[cardIdx]) {
+        cards[cardIdx].files = (cards[cardIdx].files || []).filter(function(f) { return f.name !== filename; });
+        renderCardFiles(cardIdx, cards[cardIdx].files);
+      }
+    }
+  });
 }
 
 // ---- Pending Testimonies (admin) ----
