@@ -28,6 +28,9 @@ USERS_FILE         = BASE_DIR / 'ministry_users.json'
 SESSIONS_FILE      = BASE_DIR / 'ministry_sessions.json'
 TXNS_FILE          = BASE_DIR / 'ministry_transactions.json'
 DONATIONS_FILE     = BASE_DIR / 'confirmed_donations.json'
+INCOME_FILE        = BASE_DIR / 'ministry_income.json'      # manually-recorded deposits (CashApp/Venmo/Zelle/cash/check)
+EXPENSES_FILE      = BASE_DIR / 'ministry_expenses.json'    # overhead / expenses paid out
+PAYPAL_FILE        = BASE_DIR / 'paypal_config.json'        # PayPal REST creds for Webhooks (replaces deprecated IPN)
 SMTP_FILE          = BASE_DIR / 'smtp_config.json'
 INFO_REQUESTS_FILE = BASE_DIR / 'info_requests.json'
 CONTENT_FILE       = BASE_DIR / 'ministry_content.json'
@@ -38,7 +41,17 @@ UPLOADS_DIR        = BASE_DIR / 'uploads'
 ALLOWED_UPLOAD_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.mp3', '.pdf', '.doc', '.docx'}
 MAX_UPLOAD_BYTES    = 20 * 1024 * 1024   # 20 MB
 
-ADMIN_RECOVERY_CODE = 'outreach2024reset'
+# Emergency admin reset code — read from env, NOT hardcoded. Unset ⇒ the /api/auth/reset
+# endpoint is disabled (no source-code backdoor). Set AOM_RECOVERY_CODE only when needed.
+ADMIN_RECOVERY_CODE = os.environ.get('AOM_RECOVERY_CODE', '')
+
+SESSION_TTL       = 7 * 24 * 3600    # server-side session lifetime (seconds)
+PBKDF2_ITERATIONS = 200_000          # password KDF work factor
+
+LOGIN_FAILS       = {}               # ip -> [timestamps] of recent failed logins
+LOGIN_FAILS_LOCK  = threading.Lock()
+LOGIN_MAX_FAILS   = 8                 # lock the IP after this many failures…
+LOGIN_WINDOW      = 900               # …within this many seconds (15 min)
 
 SESSIONS      = {}
 SESSIONS_LOCK = threading.Lock()
@@ -148,6 +161,12 @@ def _load_txns():               return _load_json(TXNS_FILE, [])
 def _save_txns(t):              _save_json(TXNS_FILE, t)
 def _load_donations():          return _load_json(DONATIONS_FILE, [])
 def _save_donations(d):         _save_json(DONATIONS_FILE, d)
+def _load_income():             return _load_json(INCOME_FILE, [])
+def _save_income(i):            _save_json(INCOME_FILE, i)
+def _load_expenses():           return _load_json(EXPENSES_FILE, [])
+def _save_expenses(e):          _save_json(EXPENSES_FILE, e)
+def _load_paypal():             return _load_json(PAYPAL_FILE, {})
+def _save_paypal(c):            _save_json(PAYPAL_FILE, c)
 def _load_smtp():           return _load_json(SMTP_FILE, {})
 def _save_smtp(cfg):        _save_json(SMTP_FILE, cfg)
 def _load_info_requests():  return _load_json(INFO_REQUESTS_FILE, [])
@@ -288,6 +307,34 @@ def _send_email(smtp_cfg, to_addr, subject, body_text):
             s.login(user, password)
             s.send_message(msg)
 
+# Free SMS via carrier email-to-SMS gateways (no paid provider; reuses the working email system).
+# Best-effort: requires the recipient's carrier, and carriers are slowly deprecating these.
+SMS_GATEWAYS = {
+    'verizon':    'vtext.com',
+    'att':        'txt.att.net',
+    'tmobile':    'tmomail.net',
+    'sprint':     'messaging.sprintpcs.com',
+    'boost':      'sms.myboostmobile.com',
+    'cricket':    'sms.cricketwireless.net',
+    'uscellular': 'email.uscc.net',
+    'metro':      'mymetropcs.com',
+    'googlefi':   'msg.fi.google.com',
+    'xfinity':    'vtext.com',
+}
+
+
+def _send_reset_sms(smtp_cfg, phone, carrier, token, base_url):
+    gateway = SMS_GATEWAYS.get((carrier or '').lower())
+    if not gateway:
+        raise ValueError('Unsupported carrier')
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) < 10:
+        raise ValueError('Invalid phone number')
+    to_addr = f'{digits[-10:]}@{gateway}'
+    body = f'AOM password reset (expires 1hr): {base_url}?reset_token={token}'
+    _send_email(smtp_cfg, to_addr, 'Password Reset', body)
+
+
 def _send_reset_email(smtp_cfg, to_addr, token, base_url):
     link = f'{base_url}?reset_token={token}'
     body = (
@@ -300,14 +347,137 @@ def _send_reset_email(smtp_cfg, to_addr, token, base_url):
 # ── Password ──────────────────────────────────────────────────────────────────
 
 def _hash_pw(password, salt=None):
+    """PBKDF2-HMAC-SHA256. The hash string self-describes its algo/iterations so verify can tell
+    new hashes from legacy ones and migrate transparently."""
     if salt is None:
         salt = secrets.token_hex(16)
-    h = hashlib.sha256((salt + password).encode()).hexdigest()
-    return salt, h
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), PBKDF2_ITERATIONS)
+    return salt, f'pbkdf2_sha256${PBKDF2_ITERATIONS}${dk.hex()}'
 
 def _verify_pw(password, salt, stored):
-    _, h = _hash_pw(password, salt)
-    return hmac.compare_digest(h, stored)
+    if stored.startswith('pbkdf2_sha256$'):
+        try:
+            _, iters, hexhash = stored.split('$', 2)
+            dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), int(iters))
+            return hmac.compare_digest(dk.hex(), hexhash)
+        except Exception:
+            return False
+    # legacy single-round SHA-256 — still verifiable, auto-upgraded to PBKDF2 on next login
+    legacy = hashlib.sha256((salt + password).encode()).hexdigest()
+    return hmac.compare_digest(legacy, stored)
+
+def _needs_rehash(stored):
+    """True for legacy hashes that should be upgraded to PBKDF2."""
+    return not stored.startswith('pbkdf2_sha256$')
+
+# ── Roles & permissions (RBAC) ──────────────────────────────────────────────────
+ROLES = ['owner', 'admin', 'editor', 'moderator', 'viewer']
+ROLE_LABELS = {'owner': 'Owner', 'admin': 'Admin', 'editor': 'Editor',
+               'moderator': 'Moderator', 'viewer': 'Viewer'}
+ROLE_DESC = {
+    'owner':     'Full control, including users, settings & finances. Cannot be removed by others.',
+    'admin':     'Manage everything except owner accounts.',
+    'editor':    'Edit site content (cards, events, newsletter). No users, settings, or finances.',
+    'moderator': 'Approve/reject testimonies & prayers; view submissions.',
+    'viewer':    'Read-only access to submissions and donation totals.',
+}
+_ALL = {'panel_access','manage_users','manage_settings','edit_content','moderate',
+        'view_submissions','manage_finances','view_donations'}
+ROLE_PERMS = {
+    'owner':     set(_ALL),
+    'admin':     set(_ALL),
+    'editor':    {'panel_access','edit_content','view_submissions'},
+    'moderator': {'panel_access','moderate','view_submissions','view_donations'},
+    'viewer':    {'panel_access','view_submissions','view_donations'},
+}
+
+EXPENSE_CATEGORIES = ['Facilities/Rent', 'Utilities', 'Salaries/Stipends', 'Outreach', 'Missions',
+                      'Events', 'Supplies', 'Office/Admin', 'Insurance', 'Benevolence', 'Other']
+INCOME_SOURCES     = ['cashapp', 'venmo', 'zelle', 'cash', 'check', 'paypal', 'other']
+
+def _role_of(u):
+    r = (u or {}).get('role')
+    return r if r in ROLE_PERMS else ('owner' if (u or {}).get('is_admin') else 'editor')
+
+def _perms_of(u):
+    return ROLE_PERMS.get(_role_of(u), set())
+
+def _ensure_roles():
+    """One-time migration: give every user an explicit role; guarantee at least one owner."""
+    users = _load_users()
+    if not users:
+        return
+    changed = False
+    for u in users.values():
+        if u.get('role') not in ROLE_PERMS:
+            u['role'] = 'owner' if u.get('is_admin') else 'editor'; changed = True
+        admin_flag = u['role'] in ('owner', 'admin')
+        if u.get('is_admin') != admin_flag:
+            u['is_admin'] = admin_flag; changed = True
+    if not any(_role_of(u) == 'owner' for u in users.values()):
+        first = min(users.items(), key=lambda kv: kv[1].get('created', 0))[0]
+        users[first]['role'] = 'owner'; users[first]['is_admin'] = True; changed = True
+    if changed:
+        _save_users(users)
+
+# ── PayPal Webhooks (replaces deprecated IPN) ───────────────────────────────────
+def _paypal_api_base(cfg):
+    return 'https://api-m.paypal.com' if cfg.get('mode', 'live') == 'live' else 'https://api-m.sandbox.paypal.com'
+
+def _paypal_token(cfg):
+    import base64
+    cid, sec = cfg.get('client_id', ''), cfg.get('client_secret', '')
+    if not cid or not sec:
+        return None
+    auth = base64.b64encode(f'{cid}:{sec}'.encode()).decode()
+    req = urllib.request.Request(
+        _paypal_api_base(cfg) + '/v1/oauth2/token', data=b'grant_type=client_credentials',
+        headers={'Authorization': 'Basic ' + auth, 'Content-Type': 'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r).get('access_token')
+
+def _paypal_verify_webhook(cfg, headers, raw_event):
+    """Verify a webhook via PayPal's verify-webhook-signature REST API. Returns True only on SUCCESS."""
+    token = _paypal_token(cfg)
+    if not token or not cfg.get('webhook_id'):
+        return False
+    payload = {
+        'auth_algo':         headers.get('Paypal-Auth-Algo', ''),
+        'cert_url':          headers.get('Paypal-Cert-Url', ''),
+        'transmission_id':   headers.get('Paypal-Transmission-Id', ''),
+        'transmission_sig':  headers.get('Paypal-Transmission-Sig', ''),
+        'transmission_time': headers.get('Paypal-Transmission-Time', ''),
+        'webhook_id':        cfg.get('webhook_id'),
+        'webhook_event':     json.loads(raw_event),
+    }
+    req = urllib.request.Request(
+        _paypal_api_base(cfg) + '/v1/notifications/verify-webhook-signature',
+        data=json.dumps(payload).encode(),
+        headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.load(r).get('verification_status') == 'SUCCESS'
+
+def _record_donation(donation):
+    """Dedupe (by id) + save a confirmed donation, then notify. Shared by IPN and Webhook paths."""
+    donations = _load_donations()
+    if any(d.get('id') == donation['id'] for d in donations):
+        return False
+    donations.append(donation)
+    _save_donations(donations)
+    amount = float(donation.get('amount', 0) or 0)
+    name   = donation.get('donor_name') or donation.get('donor_email') or 'Anonymous'
+    flabel = ' (monthly)' if donation.get('freq') == 'monthly' else ''
+    _push('💰 New Donation!', f'${amount:.2f}{flabel} from {name} — {donation.get("fund", "General")}', ['money_with_wings'])
+    try:
+        _send_email(_load_smtp(), _notify_email(), 'New Donation — Action Outreach Ministry',
+                    f'A donation was confirmed by PayPal.\n\n'
+                    f'Amount: ${amount:.2f} {donation.get("currency", "USD")}{flabel}\n'
+                    f'Donor: {donation.get("donor_name") or "Anonymous"}\n'
+                    f'Email: {donation.get("donor_email") or "not provided"}\n'
+                    f'Fund: {donation.get("fund", "General")}')
+    except Exception:
+        pass
+    return True
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
@@ -326,7 +496,14 @@ def _get_session(handler):
         if part.startswith('ms_session='):
             token = part[len('ms_session='):]
             with SESSIONS_LOCK:
-                return SESSIONS.get(token)
+                sess = SESSIONS.get(token)
+                if not sess:
+                    return None
+                # server-side expiry: a leaked token can't live forever
+                if int(time.time()) - sess.get('created', 0) > SESSION_TTL:
+                    SESSIONS.pop(token, None)
+                    return None
+                return sess
     return None
 
 def _create_session(username):
@@ -349,14 +526,18 @@ def _destroy_session(handler):
 # ── Seed ─────────────────────────────────────────────────────────────────────
 
 def _seed_admin():
+    """Seed the first owner ONLY if no users exist. Password comes from AOM_INITIAL_PASSWORD, or a
+    random one printed to the log — never a known default baked into source."""
     users = _load_users()
     if not users:
-        salt, h = _hash_pw('Ministrey2025')
+        pw = os.environ.get('AOM_INITIAL_PASSWORD') or secrets.token_urlsafe(12)
+        salt, h = _hash_pw(pw)
         users['admin'] = {
-            'salt': salt, 'hash': h, 'is_admin': True,
-            'contact_email': '', 'created': int(time.time())
+            'salt': salt, 'hash': h, 'role': 'owner', 'is_admin': True,
+            'contact_email': '', 'contact_phone': '', 'carrier': '', 'created': int(time.time())
         }
         _save_users(users)
+        print(f'[AOM] Seeded initial owner → username: admin  password: {pw}  (change it immediately)')
 
 # ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -398,17 +579,41 @@ class AOMHandler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
-    def _require_admin(self):
+    # ── Login rate-limiting (brute-force protection) ──────────────────────────
+    def _client_ip(self):
+        xff = self.headers.get('X-Forwarded-For', '')
+        return xff.split(',')[0].strip() if xff else self.client_address[0]
+
+    def _login_locked(self, ip):
+        now = time.time()
+        with LOGIN_FAILS_LOCK:
+            fails = [t for t in LOGIN_FAILS.get(ip, []) if now - t < LOGIN_WINDOW]
+            LOGIN_FAILS[ip] = fails
+            return len(fails) >= LOGIN_MAX_FAILS
+
+    def _login_fail(self, ip):
+        with LOGIN_FAILS_LOCK:
+            LOGIN_FAILS.setdefault(ip, []).append(time.time())
+
+    def _login_ok(self, ip):
+        with LOGIN_FAILS_LOCK:
+            LOGIN_FAILS.pop(ip, None)
+
+    def _require_perm(self, perm):
+        """Gate an endpoint on a specific capability. Returns the acting username or None."""
         sess = _get_session(self)
         if not sess:
             self._err('Not authenticated', 401)
             return None
-        users = _load_users()
-        u = users.get(sess['username'])
-        if not u or not u.get('is_admin'):
-            self._err('Admin required', 403)
+        u = _load_users().get(sess['username'])
+        if not u or perm not in _perms_of(u):
+            self._err('Permission denied', 403)
             return None
         return sess['username']
+
+    def _require_admin(self):
+        """Any role with admin-panel access (views). Writes use _require_perm with a finer perm."""
+        return self._require_perm('panel_access')
 
     # ── OPTIONS (preflight) ───────────────────────────────────────────────────
 
@@ -440,6 +645,14 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_admin_pending()
         if path == '/api/admin/donations':
             return self._api_admin_donations()
+        if path == '/api/admin/income':
+            return self._api_admin_income()
+        if path == '/api/admin/expenses':
+            return self._api_admin_expenses()
+        if path == '/api/admin/finance-summary':
+            return self._api_finance_summary()
+        if path == '/api/admin/paypal-config':
+            return self._api_get_paypal_config()
 
         # Static file
         file_path = (BASE_DIR / path.lstrip('/')).resolve()
@@ -476,6 +689,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/auth/reset':                self._api_reset,
             '/api/auth/request-reset':        self._api_request_reset,
             '/api/auth/reset-confirm':        self._api_reset_confirm,
+            '/api/auth/change-password':      self._api_change_password,
+            '/api/auth/update-contact':       self._api_update_contact,
             '/api/admin/content':             self._api_save_content,
             '/api/admin/upload-card-file':       self._api_upload_card_file,
             '/api/admin/delete-card-file':       self._api_delete_card_file,
@@ -484,7 +699,11 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/admin/create-user':         self._api_create_user,
             '/api/admin/delete-user':         self._api_delete_user,
             '/api/admin/set-password':        self._api_set_password,
-            '/api/admin/toggle-admin':        self._api_toggle_admin,
+            '/api/admin/set-role':            self._api_set_role,
+            '/api/admin/income/add':          self._api_income_add,
+            '/api/admin/income/delete':       self._api_income_delete,
+            '/api/admin/expense/add':         self._api_expense_add,
+            '/api/admin/expense/delete':      self._api_expense_delete,
             '/api/admin/smtp-config':         self._api_save_smtp,
             '/api/admin/smtp-test':           self._api_test_smtp,
             '/api/admin/testimony/approve':   self._api_approve_testimony,
@@ -495,6 +714,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/prayer':                    self._api_submit_prayer,
             '/api/donate/record':             self._api_donate_record,
             '/api/paypal/ipn':                self._api_paypal_ipn,
+            '/api/paypal/webhook':            self._api_paypal_webhook,
+            '/api/admin/paypal-config':       self._api_save_paypal_config,
             '/api/info-request':              self._api_info_request,
             '/api/contact':                   self._api_contact,
         }
@@ -518,10 +739,17 @@ class AOMHandler(BaseHTTPRequestHandler):
             'authenticated': True,
             'username': sess['username'],
             'is_admin': u.get('is_admin', False),
-            'contact_email': u.get('contact_email', '')
+            'role': _role_of(u),
+            'perms': sorted(_perms_of(u)),
+            'contact_email': u.get('contact_email', ''),
+            'contact_phone': u.get('contact_phone', ''),
+            'carrier': u.get('carrier', '')
         })
 
     def _api_login(self):
+        ip = self._client_ip()
+        if self._login_locked(ip):
+            return self._err('Too many failed attempts — try again in 15 minutes', 429)
         b = self._body()
         username = b.get('username', '').strip()
         password = b.get('password', '')
@@ -530,9 +758,17 @@ class AOMHandler(BaseHTTPRequestHandler):
         users = _load_users()
         key = next((k for k in users if k.lower() == username.lower()), None)
         if not key or not _verify_pw(password, users[key]['salt'], users[key]['hash']):
+            self._login_fail(ip)
             return self._err('Invalid credentials', 401)
+        self._login_ok(ip)
+        # transparent migration: upgrade legacy SHA-256 hashes to PBKDF2 on successful login
+        if _needs_rehash(users[key]['hash']):
+            salt, h = _hash_pw(password)
+            users[key]['salt'], users[key]['hash'] = salt, h
+            _save_users(users)
         token = _create_session(key)
-        cookie = f'ms_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800'
+        secure = '; Secure' if self.headers.get('X-Forwarded-Proto') == 'https' else ''
+        cookie = f'ms_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}{secure}'
         self._json({'ok': True, 'username': key, 'is_admin': users[key].get('is_admin', False)}, cookie=cookie)
 
     def _api_logout(self):
@@ -541,8 +777,9 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     def _api_reset(self):
         b = self._body()
-        if b.get('recovery_code', '') != ADMIN_RECOVERY_CODE:
-            return self._err('Invalid recovery code', 401)
+        # Disabled unless an out-of-band recovery code is set via the AOM_RECOVERY_CODE env var.
+        if not ADMIN_RECOVERY_CODE or not hmac.compare_digest(b.get('recovery_code', ''), ADMIN_RECOVERY_CODE):
+            return self._err('Recovery is disabled or the code is invalid', 401)
         users = _load_users()
         new_user = b.get('username', '').strip()
         new_pw   = b.get('password', '')
@@ -571,7 +808,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json(_load_content())
 
     def _api_save_content(self):
-        if not self._require_admin():
+        if not self._require_perm('edit_content'):
             return
         b = self._body()
         content = _load_content()
@@ -586,7 +823,7 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── Card file upload / delete ─────────────────────────────────────────────
 
     def _api_upload_card_file(self):
-        if not self._require_admin():
+        if not self._require_perm('edit_content'):
             return
         ct = self.headers.get('Content-Type', '')
         if 'multipart/form-data' not in ct:
@@ -625,7 +862,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True, 'url': url, 'name': safe, 'type': ext.lstrip('.'), 'size': len(data)})
 
     def _api_upload_newsletter_file(self):
-        if not self._require_admin():
+        if not self._require_perm('edit_content'):
             return
         ct = self.headers.get('Content-Type', '')
         if 'multipart/form-data' not in ct:
@@ -656,7 +893,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True, 'url': url, 'name': safe, 'type': ext.lstrip('.'), 'size': len(data)})
 
     def _api_delete_newsletter_file(self):
-        if not self._require_admin():
+        if not self._require_perm('edit_content'):
             return
         b = self._body()
         filename = str(b.get('filename', '')).strip()
@@ -675,7 +912,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_delete_card_file(self):
-        if not self._require_admin():
+        if not self._require_perm('edit_content'):
             return
         b = self._body()
         card_idx = str(b.get('card_index', '')).strip()
@@ -761,12 +998,12 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── Pending approval (admin) ──────────────────────────────────────────────
 
     def _api_admin_pending(self):
-        if not self._require_admin():
+        if not self._require_perm('moderate'):
             return
         self._json(_load_pending())
 
     def _api_approve_testimony(self):
-        if not self._require_admin():
+        if not self._require_perm('moderate'):
             return
         tid     = self._body().get('id', '')
         pending = _load_pending()
@@ -784,7 +1021,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_reject_testimony(self):
-        if not self._require_admin():
+        if not self._require_perm('moderate'):
             return
         tid     = self._body().get('id', '')
         pending = _load_pending()
@@ -793,7 +1030,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_approve_prayer(self):
-        if not self._require_admin():
+        if not self._require_perm('moderate'):
             return
         pid     = self._body().get('id', '')
         pending = _load_pending()
@@ -813,7 +1050,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_reject_prayer(self):
-        if not self._require_admin():
+        if not self._require_perm('moderate'):
             return
         pid     = self._body().get('id', '')
         pending = _load_pending()
@@ -824,85 +1061,118 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── Admin endpoints ───────────────────────────────────────────────────────
 
     def _api_admin_users(self):
-        if not self._require_admin():
+        if not self._require_perm('manage_users'):
             return
         users = _load_users()
         self._json([
-            {'username': k, 'is_admin': v.get('is_admin', False),
-             'contact_email': v.get('contact_email', ''), 'created': v.get('created', 0)}
+            {'username': k, 'is_admin': v.get('is_admin', False), 'role': _role_of(v),
+             'contact_email': v.get('contact_email', ''),
+             'contact_phone': v.get('contact_phone', ''), 'created': v.get('created', 0)}
             for k, v in users.items()
         ])
 
     def _api_create_user(self):
-        admin = self._require_admin()
-        if not admin:
+        actor = self._require_perm('manage_users')
+        if not actor:
             return
         b = self._body()
         username = b.get('username', '').strip()
         password = b.get('password', '')
+        role     = b.get('role', 'viewer').strip()
+        if role not in ROLE_PERMS:
+            role = 'viewer'
         if not username or not password:
             return self._err('Username and password required')
+        if len(password) < 8:
+            return self._err('Password must be at least 8 characters')
         users = _load_users()
         if any(k.lower() == username.lower() for k in users):
             return self._err('Username already exists')
+        if role == 'owner' and _role_of(users.get(actor, {})) != 'owner':
+            return self._err('Only an owner can create owner accounts', 403)
         salt, h = _hash_pw(password)
         users[username] = {
-            'salt': salt, 'hash': h,
-            'is_admin': bool(b.get('is_admin', False)),
+            'salt': salt, 'hash': h, 'role': role,
+            'is_admin': role in ('owner', 'admin'),
             'contact_email': b.get('contact_email', '').strip(),
+            'contact_phone': b.get('contact_phone', '').strip(),
+            'carrier': b.get('carrier', '').strip(),
             'created': int(time.time())
         }
         _save_users(users)
         self._json({'ok': True})
 
     def _api_delete_user(self):
-        admin = self._require_admin()
-        if not admin:
+        actor = self._require_perm('manage_users')
+        if not actor:
             return
         username = self._body().get('username', '').strip()
-        if username == admin:
+        if username == actor:
             return self._err('Cannot delete your own account')
         users = _load_users()
         if username not in users:
             return self._err('User not found')
+        if _role_of(users[username]) == 'owner':
+            if _role_of(users[actor]) != 'owner':
+                return self._err('Only an owner can remove an owner', 403)
+            if len([k for k, u in users.items() if _role_of(u) == 'owner']) <= 1:
+                return self._err('Cannot delete the last owner')
         del users[username]
         _save_users(users)
         self._json({'ok': True})
 
     def _api_set_password(self):
-        admin = self._require_admin()
-        if not admin:
+        actor = self._require_perm('manage_users')
+        if not actor:
             return
         b = self._body()
         username = b.get('username', '').strip()
         password = b.get('password', '')
         if not username or not password:
             return self._err('Username and password required')
+        if len(password) < 8:
+            return self._err('Password must be at least 8 characters')
         users = _load_users()
         if username not in users:
             return self._err('User not found')
+        if _role_of(users[username]) == 'owner' and _role_of(users[actor]) != 'owner':
+            return self._err('Only an owner can reset an owner password', 403)
         salt, h = _hash_pw(password)
         users[username]['salt'] = salt
         users[username]['hash'] = h
         _save_users(users)
         self._json({'ok': True})
 
-    def _api_toggle_admin(self):
-        admin = self._require_admin()
-        if not admin:
+    def _api_set_role(self):
+        actor = self._require_perm('manage_users')
+        if not actor:
             return
-        username = self._body().get('username', '').strip()
-        if username == admin:
-            return self._err('Cannot change your own admin status')
+        b = self._body()
+        username = b.get('username', '').strip()
+        new_role = b.get('role', '').strip()
+        if new_role not in ROLE_PERMS:
+            return self._err('Invalid role')
+        if username == actor:
+            return self._err('You cannot change your own role')
         users = _load_users()
         if username not in users:
             return self._err('User not found')
-        users[username]['is_admin'] = not users[username].get('is_admin', False)
+        actor_role  = _role_of(users[actor])
+        target_role = _role_of(users[username])
+        # Only an owner may grant owner, or modify an existing owner.
+        if (new_role == 'owner' or target_role == 'owner') and actor_role != 'owner':
+            return self._err('Only an owner can manage owner accounts', 403)
+        # Never demote the last owner.
+        if target_role == 'owner' and new_role != 'owner':
+            if len([k for k, u in users.items() if _role_of(u) == 'owner']) <= 1:
+                return self._err('Cannot demote the last owner')
+        users[username]['role'] = new_role
+        users[username]['is_admin'] = new_role in ('owner', 'admin')
         _save_users(users)
-        self._json({'ok': True, 'is_admin': users[username]['is_admin']})
+        self._json({'ok': True, 'role': new_role})
 
     def _api_admin_txns(self):
-        if not self._require_admin():
+        if not self._require_perm('view_donations'):
             return
         self._json(_load_txns())
 
@@ -914,7 +1184,7 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── SMTP config ───────────────────────────────────────────────────────────
 
     def _api_get_smtp(self):
-        if not self._require_admin():
+        if not self._require_perm('manage_settings'):
             return
         cfg = _load_smtp()
         safe = {k: v for k, v in cfg.items() if k not in ('password', 'brevo_api_key')}
@@ -923,7 +1193,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json(safe)
 
     def _api_save_smtp(self):
-        if not self._require_admin():
+        if not self._require_perm('manage_settings'):
             return
         b = self._body()
         cfg = _load_smtp()
@@ -938,7 +1208,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_test_smtp(self):
-        admin = self._require_admin()
+        admin = self._require_perm('manage_settings')
         if not admin:
             return
         cfg     = _load_smtp()
@@ -956,14 +1226,19 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     def _api_request_reset(self):
         b = self._body()
-        identifier = b.get('email', '').strip()
-        if not identifier:
-            return self._err('Email required')
-        users = _load_users()
-        found_key = next(
-            (k for k, u in users.items() if u.get('contact_email', '').lower() == identifier.lower()),
-            None
-        )
+        method  = b.get('method', 'email')          # 'email' | 'sms'
+        email   = b.get('email', '').strip()
+        phone   = b.get('phone', '').strip()
+        carrier = b.get('carrier', '').strip()
+        users   = _load_users()
+        if method == 'sms':
+            digits = re.sub(r'\D', '', phone)
+            found_key = next((k for k, u in users.items()
+                              if re.sub(r'\D', '', u.get('contact_phone', '')) == digits and digits), None)
+        else:
+            found_key = next((k for k, u in users.items()
+                              if u.get('contact_email', '').lower() == email.lower() and email), None)
+        # Always return ok (don't leak which accounts exist)
         if not found_key:
             return self._json({'ok': True})
         cfg   = _load_smtp()
@@ -972,11 +1247,53 @@ class AOMHandler(BaseHTTPRequestHandler):
             RESET_TOKENS[token] = {'username': found_key, 'expires': time.time() + 3600}
         host  = self.headers.get('Host', 'actionoutreachministry.com')
         proto = 'https' if self.headers.get('X-Forwarded-Proto') == 'https' else 'http'
+        base  = f'{proto}://{host}'
         try:
-            _send_reset_email(cfg, users[found_key]['contact_email'], token, f'{proto}://{host}')
+            if method == 'sms':
+                _send_reset_sms(cfg, users[found_key].get('contact_phone', ''),
+                                users[found_key].get('carrier', carrier), token, base)
+            else:
+                _send_reset_email(cfg, users[found_key]['contact_email'], token, base)
         except Exception as e:
-            return self._err(f'Email could not be sent: {e}', 500)
+            return self._err(f'Could not send reset: {e}', 500)
         self._json({'ok': True})
+
+    def _api_change_password(self):
+        """Self-service: a logged-in user changes their own password (old → new)."""
+        sess = _get_session(self)
+        if not sess:
+            return self._err('Not authenticated', 401)
+        b = self._body()
+        old_pw = b.get('old_password', '')
+        new_pw = b.get('new_password', '')
+        if len(new_pw) < 8:
+            return self._err('New password must be at least 8 characters')
+        users = _load_users()
+        u = users.get(sess['username'])
+        if not u or not _verify_pw(old_pw, u['salt'], u['hash']):
+            return self._err('Current password is incorrect', 401)
+        salt, h = _hash_pw(new_pw)
+        u['salt'], u['hash'] = salt, h
+        _save_users(users)
+        self._json({'ok': True})
+
+    def _api_update_contact(self):
+        """Self-service: a logged-in user sets their own recovery contact (email / phone / carrier)
+        — required for password reset to reach them."""
+        sess = _get_session(self)
+        if not sess:
+            return self._err('Not authenticated', 401)
+        b = self._body()
+        users = _load_users()
+        u = users.get(sess['username'])
+        if not u:
+            return self._err('User not found', 404)
+        u['contact_email'] = b.get('contact_email', u.get('contact_email', '')).strip()
+        u['contact_phone'] = b.get('contact_phone', u.get('contact_phone', '')).strip()
+        u['carrier']       = b.get('carrier', u.get('carrier', '')).strip()
+        _save_users(users)
+        self._json({'ok': True, 'contact_email': u['contact_email'],
+                    'contact_phone': u['contact_phone'], 'carrier': u['carrier']})
 
     def _api_reset_confirm(self):
         b = self._body()
@@ -1099,9 +1416,178 @@ class AOMHandler(BaseHTTPRequestHandler):
         self._json({'ok': True})
 
     def _api_admin_donations(self):
-        if not self._require_admin():
+        if not self._require_perm('view_donations'):
             return
         self._json(_load_donations())
+
+    # ── Finances: recorded income (deposits) + expenses + accounting summary ───
+    def _period_start(self):
+        from urllib.parse import parse_qs
+        period = (parse_qs(urlparse(self.path).query).get('period', ['all'])[0]).lower()
+        import datetime as _dt
+        now = _dt.datetime.now()
+        if period == 'month':
+            return period, _dt.datetime(now.year, now.month, 1).timestamp()
+        if period == 'year':
+            return period, _dt.datetime(now.year, 1, 1).timestamp()
+        return period, 0
+
+    def _api_admin_income(self):
+        if not self._require_perm('manage_finances'):
+            return
+        self._json(_load_income())
+
+    def _api_admin_expenses(self):
+        if not self._require_perm('manage_finances'):
+            return
+        self._json(_load_expenses())
+
+    def _api_income_add(self):
+        actor = self._require_perm('manage_finances')
+        if not actor:
+            return
+        b = self._body()
+        try:
+            amount = round(float(b.get('amount', 0)), 2)
+        except Exception:
+            amount = 0
+        if amount <= 0:
+            return self._err('Amount must be greater than 0')
+        rec = {'id': secrets.token_hex(8),
+               'date': b.get('date', '').strip() or time.strftime('%Y-%m-%d'),
+               'source': b.get('source', 'cashapp').strip() or 'other',
+               'amount': amount, 'fund': b.get('fund', 'General').strip() or 'General',
+               'donor': b.get('donor', '').strip(), 'notes': b.get('notes', '').strip(),
+               'recorded_by': actor, 'ts': int(time.time())}
+        income = _load_income(); income.append(rec); _save_income(income)
+        self._json({'ok': True, 'id': rec['id']})
+
+    def _api_income_delete(self):
+        if not self._require_perm('manage_finances'):
+            return
+        rid = self._body().get('id', '')
+        _save_income([r for r in _load_income() if r.get('id') != rid])
+        self._json({'ok': True})
+
+    def _api_expense_add(self):
+        actor = self._require_perm('manage_finances')
+        if not actor:
+            return
+        b = self._body()
+        try:
+            amount = round(float(b.get('amount', 0)), 2)
+        except Exception:
+            amount = 0
+        if amount <= 0:
+            return self._err('Amount must be greater than 0')
+        if not b.get('payee', '').strip():
+            return self._err('Payee is required')
+        rec = {'id': secrets.token_hex(8),
+               'date': b.get('date', '').strip() or time.strftime('%Y-%m-%d'),
+               'payee': b.get('payee', '').strip(),
+               'category': b.get('category', 'Other').strip() or 'Other',
+               'amount': amount, 'method': b.get('method', '').strip(),
+               'fund': b.get('fund', 'General').strip() or 'General',
+               'notes': b.get('notes', '').strip(),
+               'recorded_by': actor, 'ts': int(time.time())}
+        exp = _load_expenses(); exp.append(rec); _save_expenses(exp)
+        self._json({'ok': True, 'id': rec['id']})
+
+    def _api_expense_delete(self):
+        if not self._require_perm('manage_finances'):
+            return
+        eid = self._body().get('id', '')
+        _save_expenses([e for e in _load_expenses() if e.get('id') != eid])
+        self._json({'ok': True})
+
+    def _api_finance_summary(self):
+        if not self._require_perm('manage_finances'):
+            return
+        period, start = self._period_start()
+        # Income = PayPal-confirmed donations + manually recorded deposits (NOT click-intents).
+        income_items = []
+        for d in _load_donations():
+            if d.get('timestamp', 0) >= start:
+                income_items.append({'amount': float(d.get('amount', 0) or 0),
+                                     'fund': d.get('fund', 'General') or 'General', 'source': 'paypal'})
+        for r in _load_income():
+            if r.get('ts', 0) >= start:
+                income_items.append({'amount': float(r.get('amount', 0) or 0),
+                                     'fund': r.get('fund', 'General') or 'General',
+                                     'source': r.get('source', 'other') or 'other'})
+        expenses = [e for e in _load_expenses() if e.get('ts', 0) >= start]
+
+        def _by(items, field):
+            out = {}
+            for i in items:
+                k = i.get(field, 'Other') or 'Other'
+                out[k] = round(out.get(k, 0) + float(i.get('amount', 0) or 0), 2)
+            return out
+
+        income_total  = round(sum(i['amount'] for i in income_items), 2)
+        expense_total = round(sum(float(e.get('amount', 0) or 0) for e in expenses), 2)
+        self._json({
+            'period': period,
+            'income_total': income_total, 'expense_total': expense_total,
+            'net': round(income_total - expense_total, 2),
+            'income_by_source': _by(income_items, 'source'),
+            'income_by_fund':   _by(income_items, 'fund'),
+            'expense_by_category': _by(expenses, 'category'),
+            'expense_by_fund':     _by(expenses, 'fund'),
+            'income_count': len(income_items), 'expense_count': len(expenses),
+            'categories': EXPENSE_CATEGORIES, 'sources': INCOME_SOURCES,
+        })
+
+    def _api_paypal_webhook(self):
+        """PayPal Webhook listener (the supported replacement for IPN). Verifies the signature via
+        PayPal's REST API, then records confirmed payments. Always returns 200 to PayPal."""
+        length = int(self.headers.get('Content-Length', 0))
+        raw = self.rfile.read(length)
+        cfg = _load_paypal()
+        try:
+            if _paypal_verify_webhook(cfg, self.headers, raw):
+                evt   = json.loads(raw)
+                etype = evt.get('event_type', '')
+                res   = evt.get('resource', {}) or {}
+                if etype in ('PAYMENT.CAPTURE.COMPLETED', 'PAYMENT.SALE.COMPLETED'):
+                    amt      = res.get('amount', {}) or {}
+                    amount   = float(amt.get('value') or amt.get('total') or 0)
+                    currency = amt.get('currency_code') or amt.get('currency') or 'USD'
+                    payer    = res.get('payer', {}) or {}
+                    pn       = payer.get('name', {}) or {}
+                    donor    = (str(pn.get('given_name', '')) + ' ' + str(pn.get('surname', ''))).strip()
+                    email    = payer.get('email_address', '')
+                    fund     = res.get('custom_id') or res.get('invoice_id') or 'General Fund'
+                    freq     = 'monthly' if res.get('billing_agreement_id') else 'once'
+                    tid      = res.get('id') or evt.get('id') or secrets.token_hex(8)
+                    _record_donation({'id': tid, 'amount': amount, 'currency': currency,
+                                      'donor_name': donor, 'donor_email': email, 'fund': fund,
+                                      'freq': freq, 'timestamp': int(time.time()), 'source': 'paypal_webhook'})
+        except Exception:
+            pass
+        self.send_response(200)
+        self.end_headers()
+
+    def _api_get_paypal_config(self):
+        if not self._require_perm('manage_settings'):
+            return
+        cfg = _load_paypal()
+        self._json({'client_id': cfg.get('client_id', ''), 'webhook_id': cfg.get('webhook_id', ''),
+                    'mode': cfg.get('mode', 'live'), 'has_secret': bool(cfg.get('client_secret'))})
+
+    def _api_save_paypal_config(self):
+        if not self._require_perm('manage_settings'):
+            return
+        b = self._body()
+        cfg = _load_paypal()
+        cfg['client_id']  = b.get('client_id', '').strip()
+        cfg['webhook_id'] = b.get('webhook_id', '').strip()
+        cfg['mode']       = b.get('mode', 'live').strip() or 'live'
+        # only overwrite the secret if a new one was provided (UI sends blank to keep existing)
+        if b.get('client_secret', '').strip():
+            cfg['client_secret'] = b.get('client_secret', '').strip()
+        _save_paypal(cfg)
+        self._json({'ok': True})
 
     def _api_paypal_ipn(self):
         # Read raw IPN body
@@ -1193,6 +1679,7 @@ _seed_admin()
 _seed_content()
 
 if __name__ == '__main__':
+    _ensure_roles()   # migrate existing users to explicit roles; guarantee an owner
     server = ThreadedHTTPServer(('0.0.0.0', PORT), AOMHandler)
     print(f'Action Outreach Ministry server → http://0.0.0.0:{PORT}')
     try:

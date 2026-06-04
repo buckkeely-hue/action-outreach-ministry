@@ -623,8 +623,27 @@ body {
 }
 .admin-tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 14px 20px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.admin-tab-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.admin-tab-group-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #8a93a6;
+  padding-left: 3px;
+}
+.admin-tab-group-row {
+  display: flex;
+  gap: 5px;
   flex-wrap: wrap;
 }
 .admin-tab {

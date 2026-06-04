@@ -1,1 +1,18 @@
+# Secrets & credentials — never commit
 smtp_config.json
+ministry_users.json
+paypal_config.json
+ministry_sessions.json
+
+# Donor PII & financial data — keep off version control
+confirmed_donations.json
+ministry_transactions.json
+ministry_income.json
+ministry_expenses.json
+contacts.json
+info_requests.json
+ministry_pending.json
+
+# Python
+__pycache__/
+*.pyc

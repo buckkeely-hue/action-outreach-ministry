@@ -74,8 +74,9 @@ var CONTENT_DEFAULTS = {
   fetch('/api/auth/status')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (d.authenticated && d.is_admin) {
-        currentAdminUser = { username: d.username, is_admin: d.is_admin };
+      if (d.authenticated) {
+        currentAdminUser = { username: d.username, is_admin: d.is_admin, role: d.role, perms: d.perms || [] };
+        MY_PERMS = d.perms || [];
         _applyNewsletterNavVisibility();
       }
     })
@@ -574,8 +575,8 @@ function checkAdminPw() {
       document.getElementById('admin-login-wrap').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
       var bar = document.getElementById('admin-logged-in-bar');
-      if (bar) bar.textContent = '✓ Logged in as ' + d.username;
-      adminTab('settings');
+      if (bar) bar.textContent = '✓ Logged in as ' + d.username + ' · ' + (d.is_admin ? 'admin' : 'member');
+      initAdminPanel();
     } else {
       document.getElementById('admin-pw-err').style.display = 'block';
     }
@@ -596,30 +597,104 @@ function toggleResetSection() {
   wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
 }
 
-function doResetCredentials() {
-  var code = document.getElementById('admin-recovery-code').value.trim();
-  var user = document.getElementById('admin-reset-user').value.trim();
-  var pw   = document.getElementById('admin-reset-pw').value;
-  document.getElementById('admin-reset-err').style.display = 'none';
-  document.getElementById('admin-reset-ok').style.display  = 'none';
-  fetch('/api/auth/reset', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({recovery_code: code, username: user, password: pw})
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.ok) {
-      document.getElementById('admin-reset-ok').style.display = 'block';
-      document.getElementById('admin-recovery-code').value = '';
-      document.getElementById('admin-reset-user').value = '';
-      document.getElementById('admin-reset-pw').value = '';
-    } else {
-      document.getElementById('admin-reset-err').textContent = d.error || 'Reset failed.';
-      document.getElementById('admin-reset-err').style.display = 'block';
-    }
-  }).catch(function() {
-    document.getElementById('admin-reset-err').style.display = 'block';
+// ---- Forgot password: request a reset link by email or SMS ----
+var _resetMethod = 'email';
+function setResetMethod(m) {
+  _resetMethod = m;
+  document.getElementById('reset-email-fields').style.display = m === 'email' ? 'block' : 'none';
+  document.getElementById('reset-sms-fields').style.display   = m === 'sms'   ? 'block' : 'none';
+  document.getElementById('reset-method-email-btn').style.opacity = m === 'email' ? '1' : '0.55';
+  document.getElementById('reset-method-sms-btn').style.opacity   = m === 'sms'   ? '1' : '0.55';
+}
+function requestReset() {
+  var errEl = document.getElementById('admin-reset-err');
+  var okEl  = document.getElementById('admin-reset-ok');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  var payload = {method: _resetMethod};
+  if (_resetMethod === 'sms') {
+    payload.phone   = document.getElementById('reset-req-phone').value.trim();
+    payload.carrier = document.getElementById('reset-req-carrier').value;
+    if (!payload.phone || !payload.carrier) { errEl.textContent = 'Enter your mobile number and carrier.'; errEl.style.display = 'block'; return; }
+  } else {
+    payload.email = document.getElementById('reset-req-email').value.trim();
+    if (!payload.email) { errEl.textContent = 'Enter your account email.'; errEl.style.display = 'block'; return; }
+  }
+  fetch('/api/auth/request-reset', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) okEl.style.display = 'block';
+    else { errEl.textContent = d.error || 'Could not send reset link.'; errEl.style.display = 'block'; }
+  }).catch(function(){ errEl.textContent = 'Network error.'; errEl.style.display = 'block'; });
+}
+
+// ---- My Account: change own password + recovery contact ----
+function changeMyPassword() {
+  var msg = document.getElementById('acct-pw-msg');
+  function show(t, ok){ msg.textContent = t; msg.style.color = ok ? '#86efac' : '#f87171'; msg.style.display = 'block'; }
+  var oldPw = document.getElementById('acct-old-pw').value;
+  var newPw = document.getElementById('acct-new-pw').value;
+  var newPw2 = document.getElementById('acct-new-pw2').value;
+  msg.style.display = 'none';
+  if (newPw.length < 8) return show('New password must be at least 8 characters.', false);
+  if (newPw !== newPw2)  return show('New passwords do not match.', false);
+  fetch('/api/auth/change-password', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({old_password: oldPw, new_password: newPw})
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) { show('✓ Password updated.', true);
+      document.getElementById('acct-old-pw').value=''; document.getElementById('acct-new-pw').value=''; document.getElementById('acct-new-pw2').value=''; }
+    else show(d.error || 'Update failed.', false);
+  }).catch(function(){ show('Network error.', false); });
+}
+function saveMyContact() {
+  var msg = document.getElementById('acct-contact-msg');
+  function show(t, ok){ msg.textContent = t; msg.style.color = ok ? '#86efac' : '#f87171'; msg.style.display = 'block'; }
+  msg.style.display = 'none';
+  fetch('/api/auth/update-contact', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      contact_email: document.getElementById('acct-email').value.trim(),
+      contact_phone: document.getElementById('acct-phone').value.trim(),
+      carrier: document.getElementById('acct-carrier').value
+    })
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) show('✓ Recovery contact saved.', true);
+    else show(d.error || 'Save failed.', false);
+  }).catch(function(){ show('Network error.', false); });
+}
+// ---- Role-based tab gating ----
+var MY_PERMS = [];
+var TAB_PERM = {
+  settings:'manage_settings', account:null, content:'edit_content',
+  testimonies:'moderate', events:'edit_content', prayer:'moderate',
+  contacts:'view_submissions', donations:'view_donations', finances:'manage_finances',
+  newsletter:'edit_content', inforequests:'view_submissions', users:'manage_users'
+};
+function applyTabPerms(perms) {
+  document.querySelectorAll('.admin-tab').forEach(function(btn){
+    var need = TAB_PERM[btn.dataset.tab];
+    btn.style.display = (!need || perms.indexOf(need) >= 0) ? '' : 'none';
+  });
+  // hide a whole group if none of its tabs are visible for this role
+  document.querySelectorAll('.admin-tab-group').forEach(function(g){
+    var anyVisible = Array.prototype.some.call(g.querySelectorAll('.admin-tab'), function(b){ return b.style.display !== 'none'; });
+    g.style.display = anyVisible ? '' : 'none';
   });
 }
+function initAdminPanel() {
+  fetch('/api/auth/status').then(function(r){return r.json();}).then(function(d){
+    if (!d || !d.authenticated) return;
+    MY_PERMS = d.perms || [];
+    document.getElementById('acct-email').value   = d.contact_email || '';
+    document.getElementById('acct-phone').value   = d.contact_phone || '';
+    document.getElementById('acct-carrier').value = d.carrier || '';
+    applyTabPerms(MY_PERMS);
+    var firstBtn = Array.prototype.filter.call(document.querySelectorAll('.admin-tab'),
+      function(b){ return b.style.display !== 'none'; })[0];
+    adminTab(firstBtn ? firstBtn.dataset.tab : 'account');
+  }).catch(function(){ adminTab('account'); });
+}
+function prefillAccount() { initAdminPanel(); }
 
 // ---- Password Reset Confirm (from email link) ----
 var _pendingResetToken = null;
@@ -722,6 +797,7 @@ function adminTab(name) {
   if (name === 'newsletter')  { populateNewsletterTab(); }
   if (name === 'contacts')    { renderAdminContacts(); }
   if (name === 'donations')   { renderAdminDonations(); populateDonationsSetup(); }
+  if (name === 'finances')    { loadFinances(); }
   if (name === 'users')       { renderAdminUsers(); }
   if (name === 'inforequests'){ renderAdminInfoRequests(); }
 }
@@ -1345,27 +1421,32 @@ function renderAdminInfoRequests() {
 }
 
 // ---- User Management ----
+var ROLE_BADGE = {owner:'#fbbf24', admin:'#f59e0b', editor:'#60a5fa', moderator:'#a78bfa', viewer:'#94a3b8'};
 function renderAdminUsers() {
   var wrap = document.getElementById('admin-users-list');
   wrap.innerHTML = '<p style="color:#94a3b8;font-size:13px;">Loading…</p>';
   fetch('/api/admin/users').then(function(r) { return r.json(); }).then(function(users) {
-    if (!users.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No users yet.</p>'; return; }
+    if (!users.length || users.error) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No users to show.</p>'; return; }
+    var roles = ['viewer','moderator','editor','admin','owner'];
     wrap.innerHTML = users.map(function(u) {
       var isSelf = currentAdminUser && u.username === currentAdminUser.username;
       var slug   = u.username.replace(/[^a-z0-9]/gi, '_');
+      var role   = u.role || (u.is_admin ? 'admin' : 'viewer');
+      var badge  = '<span style="color:' + (ROLE_BADGE[role]||'#94a3b8') + ';font-size:11px;margin-left:6px;text-transform:uppercase;letter-spacing:.5px;">' + role + '</span>';
+      var roleSel = isSelf ? '' :
+        '<select class="custom-input" style="width:auto;display:inline-block;padding:4px 8px;font-size:12px;" onchange="setUserRole(\'' + escHtml(u.username) + '\',this.value)">' +
+        roles.map(function(rr){ return '<option value="' + rr + '"' + (rr===role?' selected':'') + '>' + rr + '</option>'; }).join('') + '</select>';
       return '<div class="admin-item">' +
-        '<div class="admin-item-preview"><strong>' + escHtml(u.username) + '</strong>' +
-        (u.is_admin ? ' <span style="color:#fbbf24;font-size:11px;margin-left:4px;">ADMIN</span>' : '') +
+        '<div class="admin-item-preview"><strong>' + escHtml(u.username) + '</strong>' + badge +
         (isSelf ? ' <span style="color:#94a3b8;font-size:11px;margin-left:4px;">(you)</span>' : '') +
         (u.contact_email ? '&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#94a3b8;font-size:12px;">' + escHtml(u.contact_email) + '</span>' : '') +
         '</div>' +
-        '<div class="admin-item-actions">' +
+        '<div class="admin-item-actions">' + roleSel +
         '<button class="admin-item-btn" onclick="promptSetUserPw(\'' + escHtml(u.username) + '\')">Set Password</button>' +
-        (!isSelf ? '<button class="admin-item-btn" onclick="toggleAomAdmin(\'' + escHtml(u.username) + '\')">' + (u.is_admin ? 'Revoke Admin' : 'Make Admin') + '</button>' : '') +
         (!isSelf ? '<button class="admin-item-btn del" onclick="deleteAomUser(\'' + escHtml(u.username) + '\')">Delete</button>' : '') +
         '</div>' +
         '<div id="user-pw-row-' + slug + '" style="display:none;margin-top:8px;">' +
-        '<input type="password" id="user-pw-input-' + slug + '" class="custom-input" placeholder="New password" style="width:calc(100% - 80px);display:inline-block;vertical-align:middle;">' +
+        '<input type="password" id="user-pw-input-' + slug + '" class="custom-input" placeholder="New password (min 8)" style="width:calc(100% - 80px);display:inline-block;vertical-align:middle;">' +
         '<button class="admin-item-btn" style="margin-left:6px;vertical-align:middle;" onclick="saveUserPw(\'' + escHtml(u.username) + '\')">Set</button>' +
         '</div>' +
         '</div>';
@@ -1391,12 +1472,13 @@ function saveUserPw(username) {
   });
 }
 
-function toggleAomAdmin(username) {
-  fetch('/api/admin/toggle-admin', {
+function setUserRole(username, role) {
+  fetch('/api/admin/set-role', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({username: username})
+    body: JSON.stringify({username: username, role: role})
   }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.ok !== undefined) renderAdminUsers();
+    if (d.error) alert(d.error);
+    renderAdminUsers();
   });
 }
 
@@ -1414,19 +1496,19 @@ function createAomUser() {
   var username = document.getElementById('new-user-name').value.trim();
   var email    = document.getElementById('new-user-email').value.trim();
   var pw       = document.getElementById('new-user-pw').value;
-  var isAdmin  = document.getElementById('new-user-admin').checked;
+  var role     = document.getElementById('new-user-role').value;
   var errEl    = document.getElementById('new-user-err');
   errEl.style.display = 'none';
   if (!username || !pw) { errEl.textContent = 'Username and password are required.'; errEl.style.display = 'block'; return; }
+  if (pw.length < 8)    { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
   fetch('/api/admin/create-user', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({username: username, password: pw, contact_email: email, is_admin: isAdmin})
+    body: JSON.stringify({username: username, password: pw, contact_email: email, role: role})
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.ok) {
       document.getElementById('new-user-name').value  = '';
       document.getElementById('new-user-email').value = '';
       document.getElementById('new-user-pw').value    = '';
-      document.getElementById('new-user-admin').checked = false;
       renderAdminUsers();
       showSaveOk('new-user-ok');
     } else {
@@ -1440,6 +1522,15 @@ function createAomUser() {
 function populateDonationsSetup() {
   var el = document.getElementById('ipn-url-display');
   if (el) el.textContent = window.location.origin + '/api/paypal/ipn';
+  var wh = document.getElementById('webhook-url-display');
+  if (wh) wh.textContent = window.location.origin + '/api/paypal/webhook';
+  fetch('/api/admin/paypal-config').then(function(r){return r.json();}).then(function(c){
+    if (!c || c.error) return;
+    var ci = document.getElementById('pp-client-id'); if (ci) ci.value = c.client_id || '';
+    var wi = document.getElementById('pp-webhook-id'); if (wi) wi.value = c.webhook_id || '';
+    var md = document.getElementById('pp-mode'); if (md) md.value = c.mode || 'live';
+    var cs = document.getElementById('pp-client-secret'); if (cs) cs.placeholder = c.has_secret ? '(saved — leave blank to keep)' : 'PayPal REST Secret';
+  }).catch(function(){});
   var st = CONTENT.settings || {};
   var pe = document.getElementById('don-paypal-email');
   var ca = document.getElementById('don-cashapp');
@@ -1477,6 +1568,105 @@ function copyIpnUrl() {
     var btn = document.querySelector('.paypal-copy-btn');
     if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
   });
+}
+function copyWebhookUrl(btn) {
+  navigator.clipboard.writeText(window.location.origin + '/api/paypal/webhook').then(function(){
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy'; }, 2000); }
+  });
+}
+function savePaypalConfig() {
+  var msg = document.getElementById('pp-config-msg');
+  function show(t, ok){ msg.textContent = t; msg.style.color = ok?'#86efac':'#f87171'; msg.style.display='block'; }
+  fetch('/api/admin/paypal-config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    client_id: document.getElementById('pp-client-id').value.trim(),
+    client_secret: document.getElementById('pp-client-secret').value.trim(),
+    webhook_id: document.getElementById('pp-webhook-id').value.trim(),
+    mode: document.getElementById('pp-mode').value
+  })}).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) { show('✓ Webhook settings saved.', true); document.getElementById('pp-client-secret').value=''; populateDonationsSetup(); }
+    else show(d.error || 'Save failed.', false);
+  }).catch(function(){ show('Network error.', false); });
+}
+
+// ---- Finances & Accounting ----
+function _money(n) { n = n || 0; return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2); }
+function _fmtBreak(obj) {
+  var keys = Object.keys(obj || {});
+  return keys.length ? keys.map(function(k){ return escHtml(k) + ': $' + (obj[k]||0).toFixed(2); }).join('  ·  ') : '—';
+}
+function loadFinances() {
+  var period = (document.getElementById('fin-period') || {}).value || 'all';
+  fetch('/api/admin/finance-summary?period=' + period).then(function(r){return r.json();}).then(function(s){
+    if (!s || s.error) return;
+    document.getElementById('fin-income').textContent  = _money(s.income_total);
+    document.getElementById('fin-expense').textContent = _money(s.expense_total);
+    var netEl = document.getElementById('fin-net');
+    netEl.textContent = _money(s.net);
+    netEl.style.color = (s.net || 0) >= 0 ? '#86efac' : '#f87171';
+    document.getElementById('fin-breakdown').innerHTML =
+      '<div><strong>Income by source:</strong> ' + _fmtBreak(s.income_by_source) + '</div>' +
+      '<div style="margin-top:4px;"><strong>Income by fund:</strong> ' + _fmtBreak(s.income_by_fund) + '</div>' +
+      '<div style="margin-top:4px;"><strong>Expenses by category:</strong> ' + _fmtBreak(s.expense_by_category) + '</div>';
+    var catSel = document.getElementById('exp-category');
+    if (catSel && !catSel.options.length && s.categories) {
+      catSel.innerHTML = s.categories.map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
+    }
+  }).catch(function(){});
+  fetch('/api/admin/income').then(function(r){return r.json();}).then(function(items){
+    var el = document.getElementById('fin-income-list');
+    items = Array.isArray(items) ? items : [];
+    el.innerHTML = items.length ? items.slice().reverse().map(function(r){
+      return '<div class="admin-item"><div class="admin-item-preview"><strong>$' + (r.amount||0).toFixed(2) + '</strong> · ' + escHtml(r.source||'') + ' · ' + escHtml(r.fund||'General') + (r.donor?' · '+escHtml(r.donor):'') +
+        '<div style="font-size:11px;color:#94a3b8;">' + escHtml(r.date||'') + (r.notes?' — '+escHtml(r.notes):'') + '</div></div>' +
+        '<div class="admin-item-actions"><button class="admin-item-btn del" onclick="deleteIncome(\'' + r.id + '\')">Delete</button></div></div>';
+    }).join('') : '<p style="color:rgba(255,255,255,0.35);font-size:13px;">No recorded deposits yet.</p>';
+  }).catch(function(){});
+  fetch('/api/admin/expenses').then(function(r){return r.json();}).then(function(items){
+    var el = document.getElementById('fin-expense-list');
+    items = Array.isArray(items) ? items : [];
+    el.innerHTML = items.length ? items.slice().reverse().map(function(e){
+      return '<div class="admin-item"><div class="admin-item-preview"><strong>$' + (e.amount||0).toFixed(2) + '</strong> · ' + escHtml(e.payee||'') + ' · ' + escHtml(e.category||'') +
+        '<div style="font-size:11px;color:#94a3b8;">' + escHtml(e.date||'') + (e.method?' · '+escHtml(e.method):'') + ' · ' + escHtml(e.fund||'General') + (e.notes?' — '+escHtml(e.notes):'') + '</div></div>' +
+        '<div class="admin-item-actions"><button class="admin-item-btn del" onclick="deleteExpense(\'' + e.id + '\')">Delete</button></div></div>';
+    }).join('') : '<p style="color:rgba(255,255,255,0.35);font-size:13px;">No expenses recorded yet.</p>';
+  }).catch(function(){});
+}
+function addIncome() {
+  var msg = document.getElementById('inc-msg');
+  function show(t, ok){ msg.textContent = t; msg.style.color = ok?'#86efac':'#f87171'; msg.style.display='block'; }
+  fetch('/api/admin/income/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    date: document.getElementById('inc-date').value, amount: document.getElementById('inc-amount').value,
+    source: document.getElementById('inc-source').value, fund: document.getElementById('inc-fund').value,
+    donor: document.getElementById('inc-donor').value, notes: document.getElementById('inc-notes').value
+  })}).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) { show('✓ Deposit recorded.', true);
+      document.getElementById('inc-amount').value=''; document.getElementById('inc-donor').value=''; document.getElementById('inc-notes').value='';
+      loadFinances();
+    } else show(d.error||'Failed to record.', false);
+  }).catch(function(){ show('Network error.', false); });
+}
+function deleteIncome(id) {
+  if (!confirm('Delete this deposit record?')) return;
+  fetch('/api/admin/income/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id})}).then(function(){ loadFinances(); });
+}
+function addExpense() {
+  var msg = document.getElementById('exp-msg');
+  function show(t, ok){ msg.textContent = t; msg.style.color = ok?'#86efac':'#f87171'; msg.style.display='block'; }
+  fetch('/api/admin/expense/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    date: document.getElementById('exp-date').value, amount: document.getElementById('exp-amount').value,
+    payee: document.getElementById('exp-payee').value, category: document.getElementById('exp-category').value,
+    method: document.getElementById('exp-method').value, fund: document.getElementById('exp-fund').value,
+    notes: document.getElementById('exp-notes').value
+  })}).then(function(r){return r.json();}).then(function(d){
+    if (d.ok) { show('✓ Expense recorded.', true);
+      document.getElementById('exp-amount').value=''; document.getElementById('exp-payee').value=''; document.getElementById('exp-method').value=''; document.getElementById('exp-notes').value='';
+      loadFinances();
+    } else show(d.error||'Failed to record.', false);
+  }).catch(function(){ show('Network error.', false); });
+}
+function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  fetch('/api/admin/expense/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id})}).then(function(){ loadFinances(); });
 }
 
 // ---- Newsletter File Uploads ----
