@@ -736,6 +736,19 @@ function loadSmtpConfig() {
     document.getElementById('smtp-tls').value       = d.tls || 'starttls';
     if (d.has_password) document.getElementById('smtp-pass').placeholder = '(saved)';
     if (d.has_brevo_key) document.getElementById('smtp-brevo-key').placeholder = '(saved)';
+    var statusEl = document.getElementById('smtp-status');
+    if (statusEl) {
+      var labels = {gmail_api:'Gmail API', brevo:'Brevo API', smtp:'Custom SMTP', none:'Not configured'};
+      var active = d.active_method || 'none';
+      if (active === 'none') {
+        statusEl.style.background = 'rgba(248,113,113,0.12)'; statusEl.style.color = '#f87171';
+        statusEl.textContent = '⚠ No email method configured — password resets and alerts will NOT send until you set one below.';
+      } else {
+        statusEl.style.background = 'rgba(134,239,172,0.12)'; statusEl.style.color = '#86efac';
+        statusEl.textContent = '● Sending via ' + labels[active] +
+          (d.notify_email ? '  ·  alerts go to ' + d.notify_email : '  ·  ⚠ set a Notify Email above so you receive alerts');
+      }
+    }
   }).catch(function() {});
 }
 function saveSmtpConfig() {
@@ -1024,16 +1037,19 @@ function loadAdminPendingTestimonies() {
     }
     wrap.innerHTML = items.map(function(item) {
       var date = new Date(item.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      var id = item.id;
       return '<div class="admin-pending-item">' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
-          '<strong style="font-size:13px;color:#fff;">' + escHtml(item.name) + '</strong>' +
-          '<span style="font-size:11px;color:#94a3b8;">' + date + '</span>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
+          '<span style="font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Awaiting review</span>' +
+          '<span style="font-size:11px;color:#94a3b8;">' + date + (item.email ? ' · ✉ ' + escHtml(item.email) : '') + '</span>' +
         '</div>' +
-        '<div style="font-size:13px;color:rgba(255,255,255,0.7);margin-bottom:8px;font-style:italic;">"' + escHtml(item.quote.substring(0,120)) + (item.quote.length > 120 ? '…' : '') + '"</div>' +
-        (item.email ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">✉ ' + escHtml(item.email) + '</div>' : '') +
-        '<div style="display:flex;gap:6px;">' +
-          '<button class="admin-item-btn" style="background:rgba(134,239,172,0.15);border-color:rgba(134,239,172,0.4);color:#86efac;" onclick="approveTestimony(\'' + item.id + '\')">✓ Approve & Publish</button>' +
-          '<button class="admin-item-btn del" onclick="rejectTestimony(\'' + item.id + '\')">✕ Reject</button>' +
+        '<label class="admin-label">Name <span style="color:#94a3b8;font-weight:400;">(edit before publishing)</span></label>' +
+        '<input type="text" id="pt-name-' + id + '" class="custom-input" value="' + escHtml(item.name) + '">' +
+        '<label class="admin-label" style="margin-top:6px;">Testimony <span style="color:#94a3b8;font-weight:400;">(edit before publishing)</span></label>' +
+        '<textarea id="pt-quote-' + id + '" class="custom-input" rows="5" style="resize:vertical;width:100%;">' + escHtml(item.quote) + '</textarea>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;">' +
+          '<button class="admin-item-btn" style="background:rgba(134,239,172,0.15);border-color:rgba(134,239,172,0.4);color:#86efac;" onclick="approveTestimony(\'' + id + '\')">✓ Approve &amp; Publish</button>' +
+          '<button class="admin-item-btn del" onclick="rejectTestimony(\'' + id + '\')">✕ Reject</button>' +
         '</div></div>';
     }).join('');
   }).catch(function() {
@@ -1042,9 +1058,15 @@ function loadAdminPendingTestimonies() {
 }
 
 function approveTestimony(id) {
+  var nameEl  = document.getElementById('pt-name-' + id);
+  var quoteEl = document.getElementById('pt-quote-' + id);
+  var payload = {id: id};
+  if (nameEl)  payload.name  = nameEl.value;
+  if (quoteEl) payload.quote = quoteEl.value;
+  if (quoteEl && !quoteEl.value.trim()) { alert('Testimony text cannot be empty.'); return; }
   fetch('/api/admin/testimony/approve', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id: id})
+    body: JSON.stringify(payload)
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.ok) {
       // Refresh live content and admin list

@@ -1005,17 +1005,23 @@ class AOMHandler(BaseHTTPRequestHandler):
     def _api_approve_testimony(self):
         if not self._require_perm('moderate'):
             return
-        tid     = self._body().get('id', '')
+        b       = self._body()
+        tid     = b.get('id', '')
         pending = _load_pending()
         entry   = next((e for e in pending['testimonies'] if e['id'] == tid), None)
         if not entry:
             return self._err('Not found', 404)
+        # The admin may EDIT the name/quote before publishing — use the edited values if sent.
+        name  = str(b.get('name',  entry.get('name', ''))).strip() or 'Anonymous'
+        quote = str(b.get('quote', entry.get('quote', ''))).strip()
+        if not quote:
+            return self._err('Testimony text cannot be empty')
         pending['testimonies'] = [e for e in pending['testimonies'] if e['id'] != tid]
         _save_pending(pending)
         content = _load_content()
         content.setdefault('testimonies', []).insert(0, {
-            'quote':  entry['quote'],
-            'author': f'— {entry["name"]}',
+            'quote':  quote,
+            'author': f'— {name}',
         })
         _save_json(CONTENT_FILE, content)
         self._json({'ok': True})
@@ -1187,9 +1193,20 @@ class AOMHandler(BaseHTTPRequestHandler):
         if not self._require_perm('manage_settings'):
             return
         cfg = _load_smtp()
-        safe = {k: v for k, v in cfg.items() if k not in ('password', 'brevo_api_key')}
-        safe['has_password'] = bool(cfg.get('password'))
+        safe = {k: v for k, v in cfg.items()
+                if k not in ('password', 'brevo_api_key', 'gmail_client_secret', 'gmail_refresh_token')}
+        safe['has_password']  = bool(cfg.get('password'))
         safe['has_brevo_key'] = bool(cfg.get('brevo_api_key'))
+        # Which delivery method is actually in effect (priority: Gmail API → Brevo → SMTP)
+        if cfg.get('gmail_refresh_token'):
+            safe['active_method'] = 'gmail_api'
+        elif cfg.get('brevo_api_key'):
+            safe['active_method'] = 'brevo'
+        elif cfg.get('host') and cfg.get('username') and cfg.get('password'):
+            safe['active_method'] = 'smtp'
+        else:
+            safe['active_method'] = 'none'
+        safe['notify_email'] = _notify_email()
         self._json(safe)
 
     def _api_save_smtp(self):

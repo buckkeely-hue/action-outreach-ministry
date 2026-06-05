@@ -453,31 +453,45 @@
           </div>
 
           <div class="admin-credentials-card">
-            <div class="admin-credentials-title">📧 Outgoing Email (SMTP)</div>
-            <button class="form-btn" onclick="testSmtpEmail()" style="margin-bottom:12px;background:#1d4ed8;border-color:#3b82f6;">📨 Send Test Email Now</button>
-            <div id="smtp-msg" style="display:none;margin-bottom:10px;font-size:13px;"></div>
-            <p style="font-size:12px;color:#94a3b8;margin:4px 0 10px;">Used for contact forms and password reset emails. Gmail App Password or any SMTP provider.</p>
-            <label class="admin-label">SMTP Host</label>
-            <input type="text" id="smtp-host" class="custom-input" placeholder="smtp.gmail.com">
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <div style="flex:1;"><label class="admin-label">Port</label><input type="number" id="smtp-port" class="custom-input" placeholder="587"></div>
-              <div style="flex:2;"><label class="admin-label">Security</label>
-                <select id="smtp-tls" class="custom-input" style="height:38px;">
-                  <option value="starttls">STARTTLS (port 587)</option>
-                  <option value="ssl">SSL (port 465)</option>
-                </select>
-              </div>
+            <div class="admin-credentials-title">📧 Email Delivery</div>
+            <div id="smtp-status" style="font-size:12px;font-weight:600;padding:8px 10px;border-radius:6px;margin-bottom:10px;background:rgba(255,255,255,0.05);color:#94a3b8;">Checking…</div>
+            <p style="font-size:12px;color:#94a3b8;margin:0 0 12px;">Sends contact replies, password-reset links, and new testimony/prayer alerts. <strong>Set up ONE method below.</strong> If both are filled, Brevo is used. Test emails go to your <strong>Notify Email</strong> (in General Settings above).</p>
+
+            <div style="border:1px solid rgba(240,192,64,0.35);border-radius:8px;padding:10px;margin-bottom:12px;">
+              <label class="admin-label" style="color:#f0c040;">✅ Method 1 — Brevo API key (recommended)</label>
+              <p style="font-size:11px;color:#94a3b8;margin:2px 0 6px;">Free 300 emails/day and bypasses server port blocks. Get a key at <strong>brevo.com → SMTP &amp; API → API Keys</strong>.</p>
+              <input type="text" id="smtp-brevo-key" class="custom-input" placeholder="xkeysib-...">
             </div>
-            <label class="admin-label" style="margin-top:8px;">Username / Email</label>
-            <input type="text" id="smtp-user" class="custom-input" placeholder="you@gmail.com">
-            <label class="admin-label" style="margin-top:8px;">Password / App Password</label>
-            <input type="password" id="smtp-pass" class="custom-input" autocomplete="new-password">
-            <label class="admin-label" style="margin-top:8px;">From Name</label>
+
+            <div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;margin-bottom:12px;">
+              <label class="admin-label">Method 2 — Custom SMTP / Gmail App Password</label>
+              <p style="font-size:11px;color:#94a3b8;margin:2px 0 6px;">Your own mail server, or Gmail using an <strong>App Password</strong> (not your normal Gmail password).</p>
+              <label class="admin-label">SMTP Host</label>
+              <input type="text" id="smtp-host" class="custom-input" placeholder="smtp.gmail.com">
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <div style="flex:1;"><label class="admin-label">Port</label><input type="number" id="smtp-port" class="custom-input" placeholder="587"></div>
+                <div style="flex:2;"><label class="admin-label">Security</label>
+                  <select id="smtp-tls" class="custom-input" style="height:38px;">
+                    <option value="starttls">STARTTLS (port 587)</option>
+                    <option value="ssl">SSL (port 465)</option>
+                  </select>
+                </div>
+              </div>
+              <label class="admin-label" style="margin-top:8px;">Username / Email (your sender address)</label>
+              <input type="text" id="smtp-user" class="custom-input" placeholder="you@gmail.com">
+              <label class="admin-label" style="margin-top:8px;">Password / App Password</label>
+              <input type="password" id="smtp-pass" class="custom-input" autocomplete="new-password">
+            </div>
+
+            <label class="admin-label">From Name (shown to recipients)</label>
             <input type="text" id="smtp-from-name" class="custom-input" placeholder="Action Outreach Ministry">
-            <label class="admin-label" style="margin-top:8px;">Brevo API Key <span style="color:#f0c040;font-size:11px;">(recommended — bypasses port blocks)</span></label>
-            <input type="text" id="smtp-brevo-key" class="custom-input" placeholder="xkeysib-...">
-            <button class="form-btn" onclick="saveSmtpConfig()" style="margin-top:12px;">Save SMTP Settings</button>
-            <div id="smtp-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">SMTP settings saved.</div>
+
+            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+              <button class="form-btn" onclick="saveSmtpConfig()">Save Email Settings</button>
+              <button class="form-btn" onclick="testSmtpEmail()" style="background:#1d4ed8;border-color:#3b82f6;">📨 Send Test Email</button>
+            </div>
+            <div id="smtp-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Email settings saved.</div>
+            <div id="smtp-msg" style="display:none;margin-top:8px;font-size:13px;"></div>
           </div>
 
           <div class="admin-credentials-card">
