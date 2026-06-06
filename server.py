@@ -220,7 +220,7 @@ def _seed_content():
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
-def _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text):
+def _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text, reply_to=''):
     import base64
     from email.mime.text import MIMEText as _MIMEText
     client_id     = smtp_cfg.get('gmail_client_id', '')
@@ -244,6 +244,8 @@ def _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text):
     msg['From']    = f'{from_name} <{send_as}>' if send_as else send_as
     msg['To']      = to_addr
     msg['Subject'] = subject
+    if reply_to:
+        msg['Reply-To'] = reply_to
     msg.attach(MIMEText(body_text, 'plain'))
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     send_req = urllib.request.Request(
@@ -258,20 +260,23 @@ def _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text):
     except urllib.error.HTTPError as e:
         raise RuntimeError(f'Gmail API error {e.code}: {e.reason}')
 
-def _send_email(smtp_cfg, to_addr, subject, body_text):
+def _send_email(smtp_cfg, to_addr, subject, body_text, reply_to=''):
     if smtp_cfg.get('gmail_refresh_token'):
-        _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text)
+        _send_email_gmail_api(smtp_cfg, to_addr, subject, body_text, reply_to)
         return
     from_name  = smtp_cfg.get('from_name', 'Action Outreach Ministry')
     from_email = smtp_cfg.get('username', '')
     brevo_key  = smtp_cfg.get('brevo_api_key', '')
     if brevo_key:
-        payload = json.dumps({
+        msg_obj = {
             'sender': {'name': from_name, 'email': from_email or 'actionoutreachministry@gmail.com'},
             'to': [{'email': to_addr}],
             'subject': subject,
             'textContent': body_text,
-        }).encode()
+        }
+        if reply_to:
+            msg_obj['replyTo'] = {'email': reply_to}
+        payload = json.dumps(msg_obj).encode()
         req = urllib.request.Request(
             'https://api.brevo.com/v3/smtp/email',
             data=payload,
@@ -291,11 +296,15 @@ def _send_email(smtp_cfg, to_addr, subject, body_text):
     tls_mode = smtp_cfg.get('tls', 'starttls')
     if not host or not user or not password:
         raise ValueError('Email not configured')
+    from email.header import Header
+    from email.utils import formataddr
     msg = MIMEMultipart()
-    msg['From']    = f'{from_name} <{user}>'
+    msg['From']    = formataddr((str(Header(from_name, 'utf-8')), user))
     msg['To']      = to_addr
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body_text, 'plain'))
+    msg['Subject'] = str(Header(subject, 'utf-8'))
+    if reply_to:
+        msg['Reply-To'] = reply_to
+    msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
     if tls_mode == 'ssl':
         with smtplib.SMTP_SSL(host, port, timeout=15) as s:
             s.login(user, password)
@@ -306,6 +315,28 @@ def _send_email(smtp_cfg, to_addr, subject, body_text):
             s.starttls()
             s.login(user, password)
             s.send_message(msg)
+
+
+def _notify_admin(subject, body_text, reply_to='', push_title='', push_body='', tags='bell'):
+    """Single intake forwarder used by every website form.
+
+    The submission is already saved to its folder/JSON by the caller (the durable
+    record). This pings a push alert and forwards a copy to the ONE inbox
+    (Settings > Notification Email), with Reply-To set to the submitter so a reply
+    from that inbox goes straight back to the person who reached out.
+    """
+    if push_title:
+        try:
+            _push(push_title, push_body or body_text[:200], tags=tags)
+        except Exception:
+            pass
+    try:
+        to = _notify_email()
+        if to:
+            _send_email(_load_smtp(), to, subject, body_text, reply_to=reply_to)
+    except Exception:
+        pass
+
 
 # Free SMS via carrier email-to-SMS gateways (no paid provider; reuses the working email system).
 # Best-effort: requires the recipient's carrier, and carriers are slowly deprecating these.
@@ -953,15 +984,11 @@ class AOMHandler(BaseHTTPRequestHandler):
         pending = _load_pending()
         pending['testimonies'].insert(0, entry)
         _save_pending(pending)
-        _push(f'New Testimony — {name}', quote[:200], tags='scroll')
-        try:
-            cfg    = _load_smtp()
-            notify = _notify_email()
-            if notify:
-                _send_email(cfg, notify, f'New Testimony Submission — {name}',
-                    f'Name:  {name}\nEmail: {email or "(not provided)"}\n\nTestimony:\n{quote}')
-        except Exception:
-            pass
+        _notify_admin(
+            f'New Testimony Submission — {name}',
+            f'Name:  {name}\nEmail: {email or "(not provided)"}\n\nTestimony:\n{quote}',
+            reply_to=email,
+            push_title=f'New Testimony — {name}', push_body=quote[:200], tags='scroll')
         self._json({'ok': True})
 
     def _api_submit_prayer(self):
@@ -984,15 +1011,12 @@ class AOMHandler(BaseHTTPRequestHandler):
         pending['prayers'].insert(0, entry)
         _save_pending(pending)
         urgency = 'urgent' if urgent else 'pray'
-        _push(f'{"URGENT " if urgent else ""}Prayer Request — {name}', text[:200], tags=urgency)
-        try:
-            cfg    = _load_smtp()
-            notify = _notify_email()
-            if notify:
-                _send_email(cfg, notify, f'New Prayer Request — {name}',
-                    f'Name:   {name}\nUrgent: {"YES" if urgent else "No"}\nEmail:  {email or "(not provided)"}\n\nRequest:\n{text}')
-        except Exception:
-            pass
+        _notify_admin(
+            f'New Prayer Request — {name}',
+            f'Name:   {name}\nUrgent: {"YES" if urgent else "No"}\nEmail:  {email or "(not provided)"}\n\nRequest:\n{text}',
+            reply_to=email,
+            push_title=f'{"URGENT " if urgent else ""}Prayer Request — {name}',
+            push_body=text[:200], tags=urgency)
         self._json({'ok': True})
 
     # ── Pending approval (admin) ──────────────────────────────────────────────
@@ -1356,13 +1380,11 @@ class AOMHandler(BaseHTTPRequestHandler):
             f'Message:\n{message}\n\n'
             f'Sent: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
         )
-        _push(f'Contact: {subject}', f'From {name} <{email}>\n{message[:150]}', tags='email')
-        try:
-            notify = _notify_email()
-            if notify:
-                _send_email(_load_smtp(), notify, f'Contact: {subject} — from {name}', body_text)
-        except Exception:
-            pass
+        _notify_admin(
+            f'Contact: {subject} — from {name}', body_text,
+            reply_to=email,
+            push_title=f'Contact: {subject}',
+            push_body=f'From {name} <{email}>\n{message[:150]}', tags='email')
         self._json({'ok': True})
 
     def _api_info_request(self):
@@ -1402,14 +1424,11 @@ class AOMHandler(BaseHTTPRequestHandler):
             f'Comments:\n  {comments or "(none)"}\n\n'
             f'Submitted: {time.strftime("%B %d, %Y at %I:%M %p", time.localtime())}\n'
         )
-        _push(f'Info Request — {entry["name"]}', f'{entry["address"]}\n{", ".join(interests) if interests else "General info"}', tags='mailbox')
-        try:
-            notify = _notify_email()
-            if notify:
-                _send_email(_load_smtp(), notify,
-                    f'Info Request: {entry["name"]} — Action Outreach Ministry', body_text)
-        except Exception:
-            pass
+        _notify_admin(
+            f'Info Request: {entry["name"]} — Action Outreach Ministry', body_text,
+            reply_to=email,
+            push_title=f'Info Request — {entry["name"]}',
+            push_body=f'{entry["address"]}\n{", ".join(interests) if interests else "General info"}', tags='mailbox')
         self._json({'ok': True})
 
     def _api_admin_info_requests(self):
