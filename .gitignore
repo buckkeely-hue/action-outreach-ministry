@@ -4,6 +4,9 @@ ministry_users.json
 paypal_config.json
 ministry_sessions.json
 
+# Live site content & settings — edited via the admin panel, never overwrite from git
+ministry_content.json
+
 # Donor PII & financial data — keep off version control
 confirmed_donations.json
 ministry_transactions.json
