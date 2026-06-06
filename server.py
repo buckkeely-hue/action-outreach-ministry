@@ -984,9 +984,14 @@ class AOMHandler(BaseHTTPRequestHandler):
         pending = _load_pending()
         pending['testimonies'].insert(0, entry)
         _save_pending(pending)
+        host  = self.headers.get('Host', 'actionoutreachministry.com')
+        proto = 'https' if self.headers.get('X-Forwarded-Proto') == 'https' else 'http'
+        review_link = f'{proto}://{host}/?review_testimony={entry["id"]}'
         _notify_admin(
             f'New Testimony Submission — {name}',
-            f'Name:  {name}\nEmail: {email or "(not provided)"}\n\nTestimony:\n{quote}',
+            f'Name:  {name}\nEmail: {email or "(not provided)"}\n\nTestimony:\n{quote}\n\n'
+            f'──────────────────────────────\n'
+            f'Review, edit & publish this testimony (opens the admin tools):\n{review_link}\n',
             reply_to=email,
             push_title=f'New Testimony — {name}', push_body=quote[:200], tags='scroll')
         self._json({'ok': True})

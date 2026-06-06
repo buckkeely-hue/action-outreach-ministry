@@ -85,6 +85,14 @@ var CONTENT_DEFAULTS = {
   // Password reset link
   var resetToken = new URLSearchParams(window.location.search).get('reset_token');
   if (resetToken) { showResetConfirmModal(resetToken); }
+
+  // Testimony review deep-link (from the admin notification email)
+  var reviewTestimonyId = new URLSearchParams(window.location.search).get('review_testimony');
+  if (reviewTestimonyId) {
+    window._pendingReviewTestimony = reviewTestimonyId;
+    window.history.replaceState({}, '', window.location.pathname);
+    openAdmin();
+  }
 })();
 
 // ---- Helpers ----
@@ -543,7 +551,7 @@ function openAdmin() {
     document.getElementById('admin-panel').style.display = 'block';
     var bar = document.getElementById('admin-logged-in-bar');
     if (bar) bar.textContent = '✓ Logged in as ' + currentAdminUser.username;
-    adminTab('settings');
+    adminTab(window._pendingReviewTestimony ? 'testimonies' : 'settings');
   } else {
     document.getElementById('admin-login-wrap').style.display = 'block';
     document.getElementById('admin-panel').style.display = 'none';
@@ -691,7 +699,8 @@ function initAdminPanel() {
     applyTabPerms(MY_PERMS);
     var firstBtn = Array.prototype.filter.call(document.querySelectorAll('.admin-tab'),
       function(b){ return b.style.display !== 'none'; })[0];
-    adminTab(firstBtn ? firstBtn.dataset.tab : 'account');
+    if (window._pendingReviewTestimony) { adminTab('testimonies'); }
+    else { adminTab(firstBtn ? firstBtn.dataset.tab : 'account'); }
   }).catch(function(){ adminTab('account'); });
 }
 function prefillAccount() { initAdminPanel(); }
@@ -1038,7 +1047,7 @@ function loadAdminPendingTestimonies() {
     wrap.innerHTML = items.map(function(item) {
       var date = new Date(item.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
       var id = item.id;
-      return '<div class="admin-pending-item">' +
+      return '<div class="admin-pending-item" id="pt-item-' + id + '">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
           '<span style="font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Awaiting review</span>' +
           '<span style="font-size:11px;color:#94a3b8;">' + date + (item.email ? ' · ✉ ' + escHtml(item.email) : '') + '</span>' +
@@ -1052,6 +1061,16 @@ function loadAdminPendingTestimonies() {
           '<button class="admin-item-btn del" onclick="rejectTestimony(\'' + id + '\')">✕ Reject</button>' +
         '</div></div>';
     }).join('');
+    if (window._pendingReviewTestimony) {
+      var tEl = document.getElementById('pt-item-' + window._pendingReviewTestimony);
+      if (tEl) {
+        tEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+        tEl.style.boxShadow = '0 0 0 3px #f0c040';
+        tEl.style.borderRadius = '8px';
+        setTimeout(function() { if (tEl) tEl.style.boxShadow = ''; }, 5000);
+      }
+      window._pendingReviewTestimony = null;
+    }
   }).catch(function() {
     wrap.innerHTML = '<p style="color:#f87171;font-size:13px;">Failed to load.</p>';
   });
