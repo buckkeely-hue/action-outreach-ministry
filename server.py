@@ -986,7 +986,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         _save_pending(pending)
         host  = self.headers.get('Host', 'actionoutreachministry.com')
         proto = 'https' if self.headers.get('X-Forwarded-Proto') == 'https' else 'http'
-        review_link = f'{proto}://{host}/?review_testimony={entry["id"]}'
+        review_link = f'{proto}://{host}/#rt-{entry["id"]}'
         _notify_admin(
             f'New Testimony Submission — {name}',
             f'Name:  {name}\nEmail: {email or "(not provided)"}\n\nTestimony:\n{quote}\n\n'

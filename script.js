@@ -86,10 +86,12 @@ var CONTENT_DEFAULTS = {
   var resetToken = new URLSearchParams(window.location.search).get('reset_token');
   if (resetToken) { showResetConfirmModal(resetToken); }
 
-  // Testimony review deep-link (from the admin notification email)
-  var reviewTestimonyId = new URLSearchParams(window.location.search).get('review_testimony');
-  if (reviewTestimonyId) {
-    window._pendingReviewTestimony = reviewTestimonyId;
+  // Testimony review deep-link (from the admin notification email).
+  // Uses a hash (#rt-<id>), NOT a query param — an "=<hex>" query value gets
+  // mangled by quoted-printable email encoding (=ca -> a bad byte).
+  var _rtHash = window.location.hash || '';
+  if (_rtHash.indexOf('#rt-') === 0) {
+    window._pendingReviewTestimony = _rtHash.slice(4);
     window.history.replaceState({}, '', window.location.pathname);
     openAdmin();
   }
