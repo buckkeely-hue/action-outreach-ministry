@@ -467,6 +467,28 @@ def _paypal_token(cfg):
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.load(r).get('access_token')
 
+def _paypal_api(cfg, method, endpoint, payload=None):
+    """Authenticated PayPal REST call. Returns (parsed_json_or_None, error_or_None)."""
+    token = _paypal_token(cfg)
+    if not token:
+        return None, 'no_token'
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(
+        _paypal_api_base(cfg) + endpoint, data=data, method=method,
+        headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r), None
+    except Exception as e:
+        body = None
+        if hasattr(e, 'read'):
+            try:
+                body = json.loads(e.read().decode())
+            except Exception:
+                body = None
+        return body, 'http_error'
+
+
 def _paypal_verify_webhook(cfg, headers, raw_event):
     """Verify a webhook via PayPal's verify-webhook-signature REST API. Returns True only on SUCCESS."""
     token = _paypal_token(cfg)
@@ -508,6 +530,47 @@ def _record_donation(donation):
                     f'Fund: {donation.get("fund", "General")}')
     except Exception:
         pass
+    # Donor tax-receipt / thank-you — only when PayPal gave us the donor's email.
+    try:
+        _send_donor_receipt(donation)
+    except Exception:
+        pass
+
+
+_FUND_LABELS = {'general': 'General Fund', 'missions': 'Global Missions',
+                'food': 'Community Feeding Program', 'bibles': 'Bible Distribution',
+                'youth': 'Youth Ministry'}
+
+
+def _send_donor_receipt(donation):
+    """Email the donor a thank-you + tax receipt (no-op if no donor email was provided)."""
+    email = (donation.get('donor_email') or '').strip()
+    if not email:
+        return
+    settings = _load_content().get('settings', {}) or {}
+    ministry = settings.get('ministryName') or 'Action Outreach Ministry'
+    ein      = settings.get('ein') or settings.get('taxId') or ''
+    amount   = float(donation.get('amount', 0) or 0)
+    fund     = donation.get('fund', 'General Fund')
+    fund     = _FUND_LABELS.get(fund, fund)
+    monthly  = donation.get('freq') == 'monthly'
+    when     = time.strftime('%B %d, %Y', time.localtime(donation.get('timestamp') or time.time()))
+    donor    = donation.get('donor_name') or 'Friend'
+    lines = [
+        f'Dear {donor},', '',
+        f'Thank you for your generous {"recurring " if monthly else ""}gift to {ministry}. '
+        'Your support directly fuels our mission and the work of the Gospel.', '',
+        f'  Amount:     ${amount:.2f} {donation.get("currency", "USD")}{" / month" if monthly else ""}',
+        f'  Designation: {fund}',
+        f'  Date:       {when}',
+        f'  Receipt #:  {donation.get("id", "")}', '',
+        f'{ministry} is a nonprofit organization. This letter may serve as your receipt for tax '
+        'purposes. No goods or services were provided in exchange for this contribution.',
+    ]
+    if ein:
+        lines.append(f'Tax ID (EIN): {ein}')
+    lines += ['', 'With gratitude,', ministry]
+    _send_email(_load_smtp(), email, f'Your gift to {ministry} — thank you!', '\n'.join(lines))
     return True
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -684,6 +747,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_finance_summary()
         if path == '/api/admin/paypal-config':
             return self._api_get_paypal_config()
+        if path == '/api/paypal/public':
+            return self._api_paypal_public()
 
         # Static file
         file_path = (BASE_DIR / path.lstrip('/')).resolve()
@@ -744,6 +809,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/testimony':                 self._api_submit_testimony,
             '/api/prayer':                    self._api_submit_prayer,
             '/api/donate/record':             self._api_donate_record,
+            '/api/paypal/create-order':       self._api_paypal_create_order,
+            '/api/paypal/capture-order':      self._api_paypal_capture_order,
             '/api/paypal/ipn':                self._api_paypal_ipn,
             '/api/paypal/webhook':            self._api_paypal_webhook,
             '/api/admin/paypal-config':       self._api_save_paypal_config,
@@ -1629,6 +1696,72 @@ class AOMHandler(BaseHTTPRequestHandler):
             cfg['client_secret'] = b.get('client_secret', '').strip()
         _save_paypal(cfg)
         self._json({'ok': True})
+
+    # ── Smart Buttons (in-page checkout via Orders v2) ────────────────────────
+    _FUND_LABELS = {'general': 'General Fund', 'missions': 'Global Missions',
+                    'food': 'Community Feeding Program', 'bibles': 'Bible Distribution',
+                    'youth': 'Youth Ministry'}
+
+    def _api_paypal_public(self):
+        """Public, no-auth: the client_id the browser SDK needs (client_id is safe to expose;
+        the secret never leaves the server). `enabled` gates the in-page flow on the frontend."""
+        cfg = _load_paypal()
+        self._json({'client_id': cfg.get('client_id', ''), 'mode': cfg.get('mode', 'live'),
+                    'enabled': bool(cfg.get('client_id') and cfg.get('client_secret'))})
+
+    def _api_paypal_create_order(self):
+        b = self._body()
+        try:
+            amount = round(float(b.get('amount', 0)), 2)
+        except Exception:
+            amount = 0.0
+        if amount < 1:
+            return self._err('Invalid amount')
+        fund = str(b.get('fund', 'general'))[:50]
+        cfg = _load_paypal()
+        name = (_load_content().get('settings', {}) or {}).get('ministryName') or 'Action Outreach Ministry'
+        payload = {
+            'intent': 'CAPTURE',
+            'purchase_units': [{
+                'amount': {'currency_code': 'USD', 'value': '%.2f' % amount},
+                'custom_id': fund,        # carried into the capture + webhook so the fund is known
+                'description': ('%s — %s' % (name, self._FUND_LABELS.get(fund, 'General Fund')))[:127],
+            }],
+            'application_context': {'shipping_preference': 'NO_SHIPPING',
+                                    'brand_name': name[:127], 'user_action': 'PAY_NOW'},
+        }
+        res, err = _paypal_api(cfg, 'POST', '/v2/checkout/orders', payload)
+        if not res or not res.get('id'):
+            return self._err('Could not create PayPal order', 502)
+        self._json({'id': res['id']})
+
+    def _api_paypal_capture_order(self):
+        b = self._body()
+        oid = str(b.get('orderID', '')).strip()
+        if not oid or not oid.isalnum():
+            return self._err('Missing or invalid orderID')
+        cfg = _load_paypal()
+        res, err = _paypal_api(cfg, 'POST', '/v2/checkout/orders/%s/capture' % oid, {})
+        if not res:
+            return self._err('Capture failed', 502)
+        status = res.get('status')
+        if status == 'COMPLETED':
+            try:
+                pu    = (res.get('purchase_units') or [{}])[0]
+                cap   = ((pu.get('payments') or {}).get('captures') or [{}])[0]
+                amt   = cap.get('amount') or {}
+                payer = res.get('payer') or {}
+                pn    = payer.get('name') or {}
+                donor = (str(pn.get('given_name', '')) + ' ' + str(pn.get('surname', ''))).strip()
+                # _record_donation dedupes by id, so the webhook firing for the same capture is a no-op
+                _record_donation({'id': cap.get('id') or oid, 'amount': float(amt.get('value') or 0),
+                                  'currency': amt.get('currency_code', 'USD'), 'donor_name': donor,
+                                  'donor_email': payer.get('email_address', ''),
+                                  'fund': pu.get('custom_id') or 'General Fund', 'freq': 'once',
+                                  'timestamp': int(time.time()), 'source': 'paypal_smart_button'})
+            except Exception:
+                pass
+        self._json({'ok': status == 'COMPLETED', 'status': status})
 
     def _api_paypal_ipn(self):
         # Read raw IPN body

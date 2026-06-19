@@ -274,6 +274,9 @@ var currentPayMethod = 'paypal';
 function openDonation() {
   document.getElementById('donation-overlay').style.display = 'flex';
   document.getElementById('donation-error').style.display = 'none';
+  document.getElementById('pm-paypal-content').style.display = 'block';
+  var ty = document.getElementById('donation-thankyou');
+  if (ty) ty.style.display = 'none';
   updateGiveBtn();
   renderAllQRs();
 }
@@ -318,7 +321,84 @@ function updateGiveBtn() {
   var amt = selectedAmount > 0 ? '$' + selectedAmount : 'Amount';
   var freq = donationFreq === 'monthly' ? '/mo' : '';
   btn.textContent = 'Give ' + amt + freq + ' Now';
+  // In-page Smart Buttons handle one-time gifts when the PayPal SDK is configured; monthly
+  // (subscriptions) and SDK-unavailable cases fall back to the redirect button.
+  var sdkOnce = paypalButtonsRendered && donationFreq === 'once';
+  var container = document.getElementById('paypal-button-container');
+  if (container) container.style.display = sdkOnce ? 'block' : 'none';
+  btn.style.display = sdkOnce ? 'none' : 'block';
 }
+
+// ---- PayPal Smart Buttons (in-page checkout) ----
+var paypalPublic = null;
+var paypalButtonsRendered = false;
+
+function initPaypal() {
+  fetch('/api/paypal/public').then(function(r) { return r.json(); }).then(function(c) {
+    paypalPublic = c;
+    if (!c || !c.enabled || !c.client_id) { return; }   // not configured → keep redirect flow
+    var sc = document.createElement('script');
+    sc.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(c.client_id) +
+             '&currency=USD&intent=capture&components=buttons&disable-funding=credit,card';
+    sc.onload = function() { renderPaypalButtons(); updateGiveBtn(); };
+    document.head.appendChild(sc);
+  }).catch(function() {});
+}
+
+function renderPaypalButtons() {
+  if (paypalButtonsRendered || typeof paypal === 'undefined') return;
+  if (!document.getElementById('paypal-button-container')) return;
+  paypal.Buttons({
+    style: { layout: 'vertical', color: 'gold', shape: 'pill', label: 'donate' },
+    createOrder: function() {
+      var errEl = document.getElementById('donation-error');
+      if (!selectedAmount || selectedAmount < 1) {
+        errEl.textContent = 'Please select or enter a donation amount.';
+        errEl.style.display = 'block';
+        return Promise.reject(new Error('no amount'));
+      }
+      errEl.style.display = 'none';
+      return fetch('/api/paypal/create-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: selectedAmount, fund: document.getElementById('fund-select').value })
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.id) throw new Error('create failed');
+        return d.id;
+      });
+    },
+    onApprove: function(data) {
+      return fetch('/api/paypal/capture-order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID: data.orderID })
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) { showDonationThankYou(); }
+        else {
+          var errEl = document.getElementById('donation-error');
+          errEl.textContent = 'Payment could not be completed. Please try again.';
+          errEl.style.display = 'block';
+        }
+      });
+    },
+    onError: function() {
+      var errEl = document.getElementById('donation-error');
+      errEl.textContent = 'A payment error occurred. Please try again, or use a QR option above.';
+      errEl.style.display = 'block';
+    }
+  }).render('#paypal-button-container');
+  paypalButtonsRendered = true;
+}
+
+function showDonationThankYou() {
+  var fundLabels = { general: 'the General Fund', missions: 'Global Missions',
+    food: 'the Community Feeding Program', bibles: 'Bible Distribution', youth: 'Youth Ministry' };
+  var fund = document.getElementById('fund-select').value;
+  document.getElementById('pm-paypal-content').style.display = 'none';
+  document.getElementById('donation-thankyou-msg').textContent =
+    'Your $' + selectedAmount + ' gift to ' + (fundLabels[fund] || 'our mission') +
+    ' was received. A confirmation is on its way.';
+  document.getElementById('donation-thankyou').style.display = 'block';
+}
+initPaypal();
 
 function renderAllQRs() {
   var methods = [
@@ -1399,11 +1479,28 @@ function renderAdminDonations() {
     var intents   = Array.isArray(results[1]) ? results[1] : [];
     var html = '';
 
-    // Confirmed (PayPal IPN verified)
-    var total = confirmed.reduce(function(s, d) { return s + (d.amount || 0); }, 0);
+    var total     = confirmed.reduce(function(s, d) { return s + (d.amount || 0); }, 0);
+    var recurring = confirmed.filter(function(d) { return d.freq === 'monthly'; });
+    var donorKeys = {};
+    confirmed.forEach(function(d) { donorKeys[(d.donor_email || d.donor_name || 'anon').toLowerCase()] = 1; });
+    var nDonors = Object.keys(donorKeys).length;
+
+    // Summary cards
+    html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">' +
+      '<div style="flex:1;min-width:120px;background:rgba(134,239,172,0.1);border:1px solid rgba(134,239,172,0.25);border-radius:8px;padding:10px 14px;">' +
+        '<div style="font-size:18px;font-weight:700;color:#86efac;">$' + total.toFixed(2) + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + confirmed.length + ' confirmed gift' + (confirmed.length===1?'':'s') + '</div></div>' +
+      '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;">' +
+        '<div style="font-size:18px;font-weight:700;color:#cbd5e1;">' + nDonors + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">donor' + (nDonors===1?'':'s') + '</div></div>' +
+      '<div style="flex:1;min-width:90px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:10px 14px;">' +
+        '<div style="font-size:18px;font-weight:700;color:#86b4f0;">' + recurring.length + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">recurring</div></div>' +
+      '</div>';
+
+    // Confirmed (PayPal Smart Button / Webhook verified)
     html += '<div style="font-size:12px;font-weight:700;color:#86efac;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;">✓ Confirmed via PayPal</div>';
     if (confirmed.length) {
-      html += '<div style="background:rgba(134,239,172,0.1);border:1px solid rgba(134,239,172,0.25);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:14px;color:#86efac;font-weight:600;">$' + total.toFixed(2) + ' confirmed across ' + confirmed.length + ' payment' + (confirmed.length===1?'':'s') + '</div>';
       html += confirmed.slice().reverse().map(function(d) {
         var date = new Date(d.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
         return '<div class="admin-item">' +
@@ -1414,7 +1511,41 @@ function renderAdminDonations() {
           '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + date + '</div></div>';
       }).join('');
     } else {
-      html += '<p style="font-size:13px;color:rgba(255,255,255,0.35);margin-bottom:14px;">No confirmed PayPal donations yet. Configure IPN in your PayPal account to enable this.</p>';
+      html += '<p style="font-size:13px;color:rgba(255,255,255,0.35);margin-bottom:14px;">No confirmed PayPal donations yet. Configure your PayPal REST credentials below to enable in-page giving and confirmed-donation tracking.</p>';
+    }
+
+    // Recurring donations
+    if (recurring.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:#86b4f0;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 8px;">↻ Recurring (monthly)</div>';
+      html += recurring.slice().reverse().map(function(d) {
+        var date = new Date(d.timestamp * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+        return '<div class="admin-item">' +
+          '<div class="admin-item-preview"><strong>$' + (d.amount||0).toFixed(2) + '/mo</strong>' +
+          (d.donor_name ? ' · ' + escHtml(d.donor_name) : '') + ' · ' + escHtml(d.fund||'General Fund') + '</div>' +
+          '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">since ' + date + '</div></div>';
+      }).join('');
+    }
+
+    // Donor history — totals per donor, biggest first
+    if (confirmed.length) {
+      var byDonor = {};
+      confirmed.forEach(function(d) {
+        var key = (d.donor_email || d.donor_name || 'Anonymous');
+        if (!byDonor[key]) byDonor[key] = { name: d.donor_name || '', email: d.donor_email || '', total: 0, count: 0, last: 0 };
+        byDonor[key].total += (d.amount || 0);
+        byDonor[key].count += 1;
+        byDonor[key].last = Math.max(byDonor[key].last, d.timestamp || 0);
+      });
+      var donors = Object.keys(byDonor).map(function(k) { return byDonor[k]; })
+        .sort(function(a, b) { return b.total - a.total; });
+      html += '<div style="font-size:12px;font-weight:700;color:#94a3b8;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 8px;">Donor history</div>';
+      html += donors.map(function(p) {
+        var last = new Date(p.last * 1000).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+        var label = escHtml(p.name || p.email || 'Anonymous') + (p.name && p.email ? ' <span style="color:#86b4f0;">&lt;' + escHtml(p.email) + '&gt;</span>' : '');
+        return '<div class="admin-item">' +
+          '<div class="admin-item-preview">' + label + ' · ' + p.count + ' gift' + (p.count===1?'':'s') + '</div>' +
+          '<div style="font-size:12px;color:#86efac;font-weight:700;flex-shrink:0;">$' + p.total.toFixed(2) + '<span style="color:#94a3b8;font-weight:400;font-size:11px;"> · ' + last + '</span></div></div>';
+      }).join('');
     }
 
     // Intents (user clicked Give button)
@@ -1579,10 +1710,12 @@ function populateDonationsSetup() {
   var ca = document.getElementById('don-cashapp');
   var ve = document.getElementById('don-venmo');
   var ze = document.getElementById('don-zelle');
+  var ei = document.getElementById('don-ein');
   if (pe) pe.value = st.paypalEmail || '';
   if (ca) ca.value = st.cashapp     || '';
   if (ve) ve.value = st.venmo       || '';
   if (ze) ze.value = st.zelle       || '';
+  if (ei) ei.value = st.ein         || '';
 }
 
 function saveDonationSettings() {
@@ -1591,6 +1724,7 @@ function saveDonationSettings() {
     cashapp:     document.getElementById('don-cashapp').value.trim(),
     venmo:       document.getElementById('don-venmo').value.trim(),
     zelle:       document.getElementById('don-zelle').value.trim(),
+    ein:         document.getElementById('don-ein').value.trim(),
   });
   fetch('/api/admin/content', {
     method: 'POST',

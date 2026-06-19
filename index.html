@@ -293,9 +293,16 @@
           <button class="freq-btn" id="freq-monthly" onclick="setFreq('monthly')">Monthly</button>
         </div>
 
+        <div id="paypal-button-container" style="margin-top:6px;"></div>
         <button class="give-btn" id="give-btn" onclick="processDonation()">Give $100 Now</button>
         <div class="secure-note">🔒 Secure giving powered by PayPal · Tax deductible</div>
         <div id="donation-error" class="donation-error" style="display:none;"></div>
+      </div>
+
+      <div id="donation-thankyou" style="display:none;text-align:center;padding:20px 8px;">
+        <div style="font-size:42px;line-height:1;margin-bottom:10px;">🎉</div>
+        <h3 style="margin:0 0 6px;">Thank you!</h3>
+        <p id="donation-thankyou-msg" class="modal-sub" style="margin:0;"></p>
       </div>
 
       <a class="paypal-giving-link" href="https://www.paypal.com/us/webapps/mpp/givingfund" target="_blank" rel="noopener">Apply for PayPal Giving Fund — 0% fees for verified nonprofits →</a>
@@ -705,6 +712,9 @@
 
             <label class="admin-label" style="margin-top:10px;">Zelle Phone or Email</label>
             <input type="text" id="don-zelle" class="custom-input" placeholder="(850) 555-1234 or email@example.com">
+
+            <label class="admin-label" style="margin-top:10px;">Tax ID / EIN <span style="color:#94a3b8;font-weight:400;">(shown on donor receipts — optional)</span></label>
+            <input type="text" id="don-ein" class="custom-input" placeholder="12-3456789">
 
             <button class="form-btn" onclick="saveDonationSettings()" style="margin-top:14px;">Save Payment Settings</button>
             <div id="don-save-ok" style="display:none;color:#86efac;margin-top:8px;font-size:13px;">Payment settings saved.</div>
