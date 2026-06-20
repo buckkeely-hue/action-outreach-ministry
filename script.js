@@ -94,6 +94,9 @@ var CONTENT_DEFAULTS = {
     window._pendingReviewTestimony = _rtHash.slice(4);
     window.history.replaceState({}, '', window.location.pathname);
     openAdmin();
+  } else if (_rtHash === '#donate') {
+    window.history.replaceState({}, '', window.location.pathname);
+    openDonation();
   }
 })();
 
