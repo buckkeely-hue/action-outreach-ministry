@@ -1199,6 +1199,7 @@ textarea.custom-input {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   margin: 8px 0 6px;
+  background: #f8fafc;
 }
 .nl-attach-pdf .nl-attach-download {
   display: inline-block;

@@ -1908,8 +1908,10 @@ function renderNewsletterAttachments(files) {
     } else if (type === 'pdf') {
       html += '<div class="nl-attach-item nl-attach-pdf">'
         + '<div class="nl-attach-label">📄 ' + escHtml(f.name) + '</div>'
-        + '<iframe src="' + escHtml(f.url) + '" class="nl-pdf-viewer" title="' + escHtml(f.name) + '"></iframe>'
-        + '<a class="nl-attach-download" href="' + escHtml(f.url) + '" target="_blank">Open / Download PDF ↗</a>'
+        + '<object data="' + escHtml(f.url) + '" type="application/pdf" class="nl-pdf-viewer">'
+        + '<a class="nl-attach-download" href="' + escHtml(f.url) + '" target="_blank">📄 Open PDF ↗</a>'
+        + '</object>'
+        + '<a class="nl-attach-download" href="' + escHtml(f.url) + '" target="_blank" style="display:block;margin-top:6px;font-size:12px;">Open / Download PDF ↗</a>'
         + '</div>';
     } else {
       var icon = FILE_TYPE_ICONS[type] || '📎';
