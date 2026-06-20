@@ -165,7 +165,7 @@ function renderCards() {
   if (!grid) return;
   var cards = CONTENT.cards || [];
   grid.innerHTML = cards.map(function(c) {
-    return '<div class="info-card"><div class="card-icon">' + c.icon + '</div><h3>' + escHtml(c.title) + '</h3><p>' + escHtml(c.text) + '</p></div>';
+    return '<div class="info-card"><div class="card-icon">' + escHtml(c.icon) + '</div><h3>' + escHtml(c.title) + '</h3><p>' + escHtml(c.text) + '</p></div>';
   }).join('');
 }
 

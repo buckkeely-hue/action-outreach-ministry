@@ -646,9 +646,25 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── Low-level response helpers ────────────────────────────────────────────
 
     def _cors(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self.headers.get('Origin', '')
+        allowed = origin if origin in ('https://actionoutreachministry.com',
+                                       'http://localhost:8000', 'http://127.0.0.1:8000') else ''
+        self.send_header('Access-Control-Allow-Origin', allowed or 'https://actionoutreachministry.com')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    def _security_headers(self):
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        self.send_header('Content-Security-Policy',
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://www.paypal.com https://www.paypalobjects.com; "
+            "frame-src https://www.paypal.com; "
+            "img-src 'self' data: https://api.qrserver.com https://www.paypalobjects.com; "
+            "connect-src 'self' https://www.paypal.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "font-src 'self' data:;")
 
     def _json(self, data, status=200, cookie=None):
         body = json.dumps(data).encode()
@@ -656,6 +672,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self._cors()
+        self._security_headers()
         if cookie:
             self.send_header('Set-Cookie', cookie)
         self.end_headers()
@@ -675,8 +692,13 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     # ── Login rate-limiting (brute-force protection) ──────────────────────────
     def _client_ip(self):
-        xff = self.headers.get('X-Forwarded-For', '')
-        return xff.split(',')[0].strip() if xff else self.client_address[0]
+        # Only trust X-Forwarded-For from the local nginx proxy
+        peer = self.client_address[0]
+        if peer in ('127.0.0.1', '::1'):
+            xff = self.headers.get('X-Forwarded-For', '')
+            if xff:
+                return xff.split(',')[0].strip()
+        return peer
 
     def _login_locked(self, ip):
         now = time.time()
@@ -767,6 +789,7 @@ class AOMHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(data)))
+        self._security_headers()
         # No caching for HTML/JS/CSS — always serve fresh
         if file_path.suffix.lower() in ('.html', '.js', '.css'):
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -1036,9 +1059,9 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     def _api_submit_testimony(self):
         b = self._body()
-        name  = b.get('name', '').strip() or 'Anonymous'
-        email = b.get('email', '').strip()
-        quote = b.get('quote', '').strip()
+        name  = b.get('name', '').strip()[:100] or 'Anonymous'
+        email = b.get('email', '').strip()[:200]
+        quote = b.get('quote', '').strip()[:5000]
         if not quote:
             return self._err('Testimony text required')
         entry = {
@@ -1065,9 +1088,9 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     def _api_submit_prayer(self):
         b = self._body()
-        name   = b.get('name', '').strip() or 'Anonymous'
-        email  = b.get('email', '').strip()
-        text   = b.get('text', '').strip()
+        name   = b.get('name', '').strip()[:100] or 'Anonymous'
+        email  = b.get('email', '').strip()[:200]
+        text   = b.get('text', '').strip()[:2000]
         urgent = bool(b.get('urgent', False))
         if not text:
             return self._err('Prayer request text required')
@@ -1434,10 +1457,10 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     def _api_contact(self):
         b = self._body()
-        name    = b.get('name', '').strip()
-        email   = b.get('email', '').strip()
-        subject = b.get('subject', '').strip()
-        message = b.get('message', '').strip()
+        name    = b.get('name', '').strip()[:100]
+        email   = b.get('email', '').strip()[:200]
+        subject = b.get('subject', '').strip()[:200]
+        message = b.get('message', '').strip()[:5000]
         if not name or not email or not subject or not message:
             return self._err('All fields are required')
         entry = {'name': name, 'email': email, 'subject': subject,
