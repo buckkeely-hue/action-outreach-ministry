@@ -1905,6 +1905,12 @@ function renderNewsletterAttachments(files) {
         + '<div class="nl-attach-label">🎵 ' + escHtml(f.name) + '</div>'
         + '<audio controls class="nl-audio" src="' + escHtml(f.url) + '"></audio>'
         + '</div>';
+    } else if (type === 'pdf') {
+      html += '<div class="nl-attach-item nl-attach-pdf">'
+        + '<div class="nl-attach-label">📄 ' + escHtml(f.name) + '</div>'
+        + '<iframe src="' + escHtml(f.url) + '" class="nl-pdf-viewer" title="' + escHtml(f.name) + '"></iframe>'
+        + '<a class="nl-attach-download" href="' + escHtml(f.url) + '" target="_blank">Open / Download PDF ↗</a>'
+        + '</div>';
     } else {
       var icon = FILE_TYPE_ICONS[type] || '📎';
       html += '<div class="nl-attach-item">'
