@@ -178,8 +178,8 @@ function renderTestimonies() {
   }).join('');
 }
 
-var _MONTH_NUM = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
 function _eventIsPast(e) {
+  var _MONTH_NUM = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
   var mn = _MONTH_NUM[e.month.toUpperCase().slice(0,3)];
   if (mn === undefined) return false;
   var day = parseInt(e.day, 10) || 1;
