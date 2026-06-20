@@ -646,25 +646,14 @@ class AOMHandler(BaseHTTPRequestHandler):
     # ── Low-level response helpers ────────────────────────────────────────────
 
     def _cors(self):
-        origin = self.headers.get('Origin', '')
-        allowed = origin if origin in ('https://actionoutreachministry.com',
-                                       'http://localhost:8000', 'http://127.0.0.1:8000') else ''
-        self.send_header('Access-Control-Allow-Origin', allowed or 'https://actionoutreachministry.com')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
     def _security_headers(self):
-        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('X-Frame-Options', 'SAMEORIGIN')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
-        self.send_header('Content-Security-Policy',
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://www.paypal.com https://www.paypalobjects.com; "
-            "frame-src https://www.paypal.com; "
-            "img-src 'self' data: https://api.qrserver.com https://www.paypalobjects.com; "
-            "connect-src 'self' https://www.paypal.com; "
-            "style-src 'self' 'unsafe-inline'; "
-            "font-src 'self' data:;")
 
     def _json(self, data, status=200, cookie=None):
         body = json.dumps(data).encode()
