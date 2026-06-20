@@ -771,6 +771,11 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_get_paypal_config()
         if path == '/api/paypal/public':
             return self._api_paypal_public()
+        if path in ('/give', '/donate'):
+            self.send_response(302)
+            self.send_header('Location', '/#donate')
+            self.end_headers()
+            return
 
         # Static file
         file_path = (BASE_DIR / path.lstrip('/')).resolve()

@@ -178,16 +178,30 @@ function renderTestimonies() {
   }).join('');
 }
 
+var _MONTH_NUM = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+function _eventIsPast(e) {
+  var mn = _MONTH_NUM[e.month.toUpperCase().slice(0,3)];
+  if (mn === undefined) return false;
+  var day = parseInt(e.day, 10) || 1;
+  var now = new Date();
+  var yr = now.getFullYear();
+  var evDate = new Date(yr, mn, day + 1); // +1 so same-day events still show
+  return evDate < now;
+}
+
 function renderEvents() {
   var list = document.getElementById('events-list');
   if (!list) return;
   var events = CONTENT.events || [];
-  list.innerHTML = events.map(function(e) {
-    return '<div class="event-card">' +
+  var html = events.map(function(e) {
+    var past = _eventIsPast(e);
+    return '<div class="event-card' + (past ? ' event-past' : '') + '">' +
+      (past ? '<div class="event-past-badge">Past Event</div>' : '') +
       '<div class="event-date-box"><span class="event-month">' + escHtml(e.month) + '</span><span class="event-day">' + escHtml(e.day) + '</span></div>' +
       '<div class="event-info"><h3>' + escHtml(e.title) + '</h3><p class="event-meta">' + escHtml(e.meta) + '</p><p>' + escHtml(e.text) + '</p></div>' +
       '</div>';
   }).join('');
+  list.innerHTML = html || '<p style="color:rgba(255,255,255,0.5);text-align:center;padding:40px 0;">No upcoming events at this time.</p>';
 }
 
 function renderPrayers() {
@@ -316,6 +330,8 @@ function setFreq(f) {
   donationFreq = f;
   document.getElementById('freq-once').classList.toggle('active', f === 'once');
   document.getElementById('freq-monthly').classList.toggle('active', f === 'monthly');
+  var mn = document.getElementById('monthly-note');
+  if (mn) mn.style.display = f === 'monthly' ? 'block' : 'none';
   updateGiveBtn();
 }
 
