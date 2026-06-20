@@ -779,16 +779,18 @@ class AOMHandler(BaseHTTPRequestHandler):
             file_path = BASE_DIR / 'index.html'
 
         data = file_path.read_bytes()
-        mime = MIME_TYPES.get(file_path.suffix.lower(), 'application/octet-stream')
+        ext  = file_path.suffix.lower()
+        mime = MIME_TYPES.get(ext, 'application/octet-stream')
         self.send_response(200)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(data)))
-        self._security_headers()
-        # No caching for HTML/JS/CSS — always serve fresh
-        if file_path.suffix.lower() in ('.html', '.js', '.css'):
+        if ext in ('.html', '.js', '.css'):
+            self._security_headers()
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
+        elif ext == '.pdf':
+            self.send_header('Content-Disposition', 'inline')
         self.end_headers()
         self.wfile.write(data)
 
