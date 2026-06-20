@@ -421,7 +421,9 @@ function renderAllQRs() {
     var display = _qrHandle(m.key, handle);
     return '<div class="qr-cell">' +
       '<div class="qr-cell-label" style="color:' + m.color + '">' + m.label + '</div>' +
+      '<a href="' + escHtml(qrUrl) + '" target="_blank" rel="noopener">' +
       '<img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=6&data=' + encodeURIComponent(qrUrl) + '" class="qr-cell-img" alt="' + m.label + ' QR">' +
+      '</a>' +
       '<div class="qr-cell-handle">' + escHtml(display) + '</div>' +
       '</div>';
   }).join('');
