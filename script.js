@@ -96,7 +96,7 @@ var CONTENT_DEFAULTS = {
     openAdmin();
   } else if (_rtHash === '#donate') {
     window.history.replaceState({}, '', window.location.pathname);
-    openDonation();
+    setTimeout(openDonation, 0);
   }
 })();
 
