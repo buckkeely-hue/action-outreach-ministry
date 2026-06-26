@@ -1005,15 +1005,27 @@ function adminUploadPhoto() {
     var fd = new FormData();
     fd.append('file', file);
     return fetch('/api/admin/upload-photo', {method:'POST', body: fd})
-      .then(function(r){return r.json();});
+      .then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { return {ok: false, error: r.status + ' ' + t}; });
+        return r.json();
+      })
+      .catch(function(e) { return {ok: false, error: e.message}; });
   });
   Promise.all(promises).then(function(results) {
     var failed = results.filter(function(r){return !r.ok;});
-    if (failed.length) { msg.textContent = 'Some uploads failed.'; msg.style.color='#f87171'; }
-    else { msg.textContent = results.length + ' photo(s) uploaded.'; msg.style.color='#86efac'; }
+    if (failed.length) {
+      msg.textContent = 'Error: ' + (failed[0].error || 'upload failed');
+      msg.style.color='#f87171';
+    } else {
+      msg.textContent = results.length + ' photo(s) uploaded.';
+      msg.style.color='#86efac';
+    }
     inp.value = '';
     loadAdminPhotos();
     loadPhotoRoll();
+  }).catch(function(e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.style.color = '#f87171';
   });
 }
 
