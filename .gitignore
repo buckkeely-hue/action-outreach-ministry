@@ -16,6 +16,9 @@ contacts.json
 info_requests.json
 ministry_pending.json
 
+# Uploaded files — managed on the server, not in git
+uploads/
+
 # Python
 __pycache__/
 *.pyc

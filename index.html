@@ -47,6 +47,8 @@
         <button class="hero-btn" onclick="openDonation()">Support Our Mission</button>
       </div>
 
+      <div class="photo-roll" id="photo-roll"></div>
+
       <div class="cards-grid" id="cards-grid"></div>
 
       <div class="about-block">
@@ -358,6 +360,7 @@
             <span class="admin-tab-group-label">Site Content</span>
             <div class="admin-tab-group-row">
               <button class="admin-tab" data-tab="content" onclick="adminTab('content')">Pages</button>
+              <button class="admin-tab" data-tab="photos" onclick="adminTab('photos')">Photos</button>
               <button class="admin-tab" data-tab="events" onclick="adminTab('events')">Events</button>
               <button class="admin-tab" data-tab="newsletter" onclick="adminTab('newsletter')">Newsletter</button>
             </div>
@@ -508,6 +511,18 @@
             <div id="settings-user-count" style="font-size:13px;color:#f0c040;margin-bottom:10px;"></div>
             <button class="form-btn" onclick="adminTab('users')">Manage Users →</button>
           </div>
+        </div>
+
+        <!-- Photos Tab -->
+        <div id="admin-tab-photos" class="admin-tab-body" style="display:none;">
+          <h4 class="admin-section-head">Photo Roll</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Photos rotate on the homepage every 10 seconds. Supported: JPG, PNG, GIF, WebP. No size limit.</p>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+            <input type="file" id="photo-upload-input" accept="image/*" multiple style="font-size:13px;color:var(--text)">
+            <button class="form-btn" onclick="adminUploadPhoto()">Upload</button>
+            <span id="photo-upload-msg" style="font-size:13px"></span>
+          </div>
+          <div id="admin-photos-list" style="display:flex;flex-wrap:wrap;gap:12px"></div>
         </div>
 
         <!-- Content Tab -->

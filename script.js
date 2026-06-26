@@ -70,6 +70,9 @@ var CONTENT_DEFAULTS = {
     })
     .catch(function() { _contentLoaded = true; });
 
+  // Photo roll
+  loadPhotoRoll();
+
   // Check auth
   fetch('/api/auth/status')
     .then(function(r) { return r.json(); })
@@ -158,6 +161,38 @@ function applyContent() {
   // Update page title
   document.title = name;
   _applyNewsletterNavVisibility();
+}
+
+// ── Photo Roll ────────────────────────────────────────────────────────────────
+var _photoRollTimer = null;
+var _photoRollIdx = 0;
+
+function loadPhotoRoll() {
+  fetch('/api/photos')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.photos || !d.photos.length) return;
+      var roll = document.getElementById('photo-roll');
+      if (!roll) return;
+      roll.innerHTML = '';
+      d.photos.forEach(function(url, i) {
+        var slide = document.createElement('div');
+        slide.className = 'photo-roll-slide' + (i === 0 ? ' active' : '');
+        slide.style.backgroundImage = 'url(' + url + ')';
+        roll.appendChild(slide);
+      });
+      if (d.photos.length > 1) {
+        if (_photoRollTimer) clearInterval(_photoRollTimer);
+        _photoRollIdx = 0;
+        _photoRollTimer = setInterval(function() {
+          var slides = roll.querySelectorAll('.photo-roll-slide');
+          slides[_photoRollIdx].classList.remove('active');
+          _photoRollIdx = (_photoRollIdx + 1) % slides.length;
+          slides[_photoRollIdx].classList.add('active');
+        }, 5000);
+      }
+    })
+    .catch(function() {});
 }
 
 function renderCards() {
@@ -925,6 +960,61 @@ function adminTab(name) {
   if (name === 'finances')    { loadFinances(); }
   if (name === 'users')       { renderAdminUsers(); }
   if (name === 'inforequests'){ renderAdminInfoRequests(); }
+  if (name === 'photos')      { loadAdminPhotos(); }
+}
+
+// ── Admin Photo Management ─────────────────────────────────────────────────────
+function loadAdminPhotos() {
+  fetch('/api/photos').then(function(r){return r.json();}).then(function(d){
+    var wrap = document.getElementById('admin-photos-list');
+    if (!wrap) return;
+    var photos = d.photos || [];
+    if (!photos.length) {
+      wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">No photos uploaded yet.</p>';
+      return;
+    }
+    wrap.innerHTML = photos.map(function(url) {
+      var name = url.split('/').pop();
+      return '<div class="admin-photo-item">' +
+        '<img src="' + url + '" class="admin-photo-thumb">' +
+        '<span class="admin-photo-name">' + name + '</span>' +
+        '<button class="form-btn form-btn-danger admin-photo-del" data-url="' + url + '">Delete</button>' +
+      '</div>';
+    }).join('');
+    wrap.querySelectorAll('.admin-photo-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!confirm('Delete this photo?')) return;
+        fetch('/api/admin/delete-photo', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({url: btn.dataset.url})
+        }).then(function(r){return r.json();}).then(function(d){
+          if (d.ok) { loadAdminPhotos(); loadPhotoRoll(); }
+          else alert(d.error || 'Delete failed');
+        });
+      });
+    });
+  });
+}
+
+function adminUploadPhoto() {
+  var inp = document.getElementById('photo-upload-input');
+  if (!inp || !inp.files.length) return;
+  var msg = document.getElementById('photo-upload-msg');
+  msg.textContent = 'Uploading…';
+  var promises = Array.prototype.map.call(inp.files, function(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    return fetch('/api/admin/upload-photo', {method:'POST', body: fd})
+      .then(function(r){return r.json();});
+  });
+  Promise.all(promises).then(function(results) {
+    var failed = results.filter(function(r){return !r.ok;});
+    if (failed.length) { msg.textContent = 'Some uploads failed.'; msg.style.color='#f87171'; }
+    else { msg.textContent = results.length + ' photo(s) uploaded.'; msg.style.color='#86efac'; }
+    inp.value = '';
+    loadAdminPhotos();
+    loadPhotoRoll();
+  });
 }
 
 function loadUserCount() {

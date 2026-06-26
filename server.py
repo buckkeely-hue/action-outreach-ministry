@@ -38,8 +38,9 @@ PENDING_FILE       = BASE_DIR / 'ministry_pending.json'
 CONTACTS_FILE      = BASE_DIR / 'contacts.json'
 UPLOADS_DIR        = BASE_DIR / 'uploads'
 
-ALLOWED_UPLOAD_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.mp3', '.pdf', '.doc', '.docx'}
-MAX_UPLOAD_BYTES    = 20 * 1024 * 1024   # 20 MB
+ALLOWED_UPLOAD_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp3', '.pdf', '.doc', '.docx'}
+ALLOWED_PHOTO_EXTS  = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+MAX_UPLOAD_BYTES    = 0   # no limit
 
 # Emergency admin reset code — read from env, NOT hardcoded. Unset ⇒ the /api/auth/reset
 # endpoint is disabled (no source-code backdoor). Set AOM_RECOVERY_CODE only when needed.
@@ -760,6 +761,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             return self._api_get_paypal_config()
         if path == '/api/paypal/public':
             return self._api_paypal_public()
+        if path == '/api/photos':
+            return self._api_photos()
         if path in ('/give', '/donate'):
             self.send_response(302)
             self.send_header('Location', '/#donate')
@@ -807,6 +810,8 @@ class AOMHandler(BaseHTTPRequestHandler):
             '/api/auth/change-password':      self._api_change_password,
             '/api/auth/update-contact':       self._api_update_contact,
             '/api/admin/content':             self._api_save_content,
+            '/api/admin/upload-photo':           self._api_upload_photo,
+            '/api/admin/delete-photo':           self._api_delete_photo,
             '/api/admin/upload-card-file':       self._api_upload_card_file,
             '/api/admin/delete-card-file':       self._api_delete_card_file,
             '/api/admin/upload-newsletter-file': self._api_upload_newsletter_file,
@@ -939,6 +944,48 @@ class AOMHandler(BaseHTTPRequestHandler):
 
     # ── Card file upload / delete ─────────────────────────────────────────────
 
+    def _api_photos(self):
+        photo_dir = UPLOADS_DIR / 'photos'
+        photos = []
+        if photo_dir.exists():
+            for f in sorted(photo_dir.iterdir()):
+                if f.suffix.lower() in ALLOWED_PHOTO_EXTS:
+                    photos.append('/uploads/photos/' + f.name)
+        self._json({'photos': photos})
+
+    def _api_upload_photo(self):
+        if not self._require_perm('edit_content'):
+            return
+        ct = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in ct:
+            return self._err('Expected multipart/form-data', 400)
+        length = int(self.headers.get('Content-Length', 0))
+        env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
+        if 'file' not in form:
+            return self._err('No file in request', 400)
+        fld = form['file']
+        ext = Path(fld.filename or '').suffix.lower()
+        if ext not in ALLOWED_PHOTO_EXTS:
+            return self._err('Only image files allowed (jpg, png, gif, webp)', 400)
+        safe = _safe_filename(fld.filename)
+        photo_dir = UPLOADS_DIR / 'photos'
+        photo_dir.mkdir(parents=True, exist_ok=True)
+        (photo_dir / safe).write_bytes(fld.file.read())
+        self._json({'ok': True, 'url': '/uploads/photos/' + safe})
+
+    def _api_delete_photo(self):
+        if not self._require_perm('edit_content'):
+            return
+        url = self._body().get('url', '')
+        if not url.startswith('/uploads/photos/'):
+            return self._err('Invalid photo URL', 400)
+        name = Path(url).name
+        fp = UPLOADS_DIR / 'photos' / _safe_filename(name)
+        if fp.exists():
+            fp.unlink()
+        self._json({'ok': True})
+
     def _api_upload_card_file(self):
         if not self._require_perm('edit_content'):
             return
@@ -946,8 +993,8 @@ class AOMHandler(BaseHTTPRequestHandler):
         if 'multipart/form-data' not in ct:
             return self._err('Expected multipart/form-data', 400)
         length = int(self.headers.get('Content-Length', 0))
-        if length > MAX_UPLOAD_BYTES:
-            return self._err('File too large (max 20 MB)', 400)
+        if MAX_UPLOAD_BYTES and length > MAX_UPLOAD_BYTES:
+            return self._err('File too large', 400)
         env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
         form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
         card_idx = form.getvalue('card_index', '').strip()
@@ -985,8 +1032,8 @@ class AOMHandler(BaseHTTPRequestHandler):
         if 'multipart/form-data' not in ct:
             return self._err('Expected multipart/form-data', 400)
         length = int(self.headers.get('Content-Length', 0))
-        if length > MAX_UPLOAD_BYTES:
-            return self._err('File too large (max 20 MB)', 400)
+        if MAX_UPLOAD_BYTES and length > MAX_UPLOAD_BYTES:
+            return self._err('File too large', 400)
         env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
         form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
         if 'file' not in form:
