@@ -960,18 +960,37 @@ class AOMHandler(BaseHTTPRequestHandler):
         if 'multipart/form-data' not in ct:
             return self._err('Expected multipart/form-data', 400)
         length = int(self.headers.get('Content-Length', 0))
-        env = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': ct, 'CONTENT_LENGTH': str(length)}
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env)
-        if 'file' not in form:
+        if not length:
+            return self._err('Empty request body', 400)
+        body = self.rfile.read(length)
+        bm = re.search(r'boundary=([^\s;]+)', ct)
+        if not bm:
+            return self._err('Missing multipart boundary', 400)
+        boundary = bm.group(1).encode()
+        file_data = filename = None
+        for part in body.split(b'--' + boundary)[1:]:
+            if part.startswith(b'--'):
+                break
+            if b'\r\n\r\n' not in part:
+                continue
+            headers_raw, _, content = part.partition(b'\r\n\r\n')
+            hdr = headers_raw.decode('utf-8', errors='replace')
+            if 'name="file"' not in hdr:
+                continue
+            fn_match = re.search(r'filename="([^"]+)"', hdr)
+            if fn_match:
+                filename = fn_match.group(1)
+            file_data = content.rstrip(b'\r\n')
+            break
+        if not file_data or not filename:
             return self._err('No file in request', 400)
-        fld = form['file']
-        ext = Path(fld.filename or '').suffix.lower()
+        ext = Path(filename).suffix.lower()
         if ext not in ALLOWED_PHOTO_EXTS:
             return self._err('Only image files allowed (jpg, png, gif, webp)', 400)
-        safe = _safe_filename(fld.filename)
+        safe = _safe_filename(filename)
         photo_dir = UPLOADS_DIR / 'photos'
         photo_dir.mkdir(parents=True, exist_ok=True)
-        (photo_dir / safe).write_bytes(fld.file.read())
+        (photo_dir / safe).write_bytes(file_data)
         self._json({'ok': True, 'url': '/uploads/photos/' + safe})
 
     def _api_delete_photo(self):
