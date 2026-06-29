@@ -1242,23 +1242,24 @@ textarea.custom-input {
   overflow: hidden;
 }
 .photo-roll:empty { display: none; }
+.photo-roll::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background:
+    linear-gradient(to right,  #f7f4ef 0%, transparent 4%, transparent 96%, #f7f4ef 100%),
+    linear-gradient(to bottom, #f7f4ef 0%, transparent 4%, transparent 96%, #f7f4ef 100%);
+}
 .photo-roll-slide {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity 2s ease-in-out;
-  background-size: contain;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   transition: opacity 1s ease-in-out;
-  -webkit-mask-image:
-    linear-gradient(to right,  transparent 0%, black 12%, black 88%, transparent 100%),
-    linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    linear-gradient(to right,  transparent 0%, black 12%, black 88%, transparent 100%),
-    linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
-  mask-composite: intersect;
 }
 .photo-roll-slide.active { opacity: 1; }
 
