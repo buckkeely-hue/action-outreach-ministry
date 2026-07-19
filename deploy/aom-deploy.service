@@ -1,0 +1,8 @@
+[Unit]
+Description=Action Outreach Ministry auto-deploy (pull latest main, restart on change)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/var/www/action-outreach-ministry/deploy/auto-deploy.sh

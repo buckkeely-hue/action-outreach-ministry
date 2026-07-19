@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for Action Outreach Ministry updates every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=aom-deploy.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,27 @@
+#!/bin/bash
+# One-time installer for Action Outreach Ministry auto-deploy.
+# Run ONCE on the VPS as root:
+#   cd /var/www/action-outreach-ministry && sudo bash deploy/install-auto-deploy.sh
+#
+# After this, every push to GitHub main goes live automatically within ~2 minutes.
+set -euo pipefail
+
+REPO="/var/www/action-outreach-ministry"
+
+# Allow root's git to operate on the www-data-owned repo without a "dubious ownership" error.
+git config --global --add safe.directory "$REPO" || true
+
+chmod +x "$REPO/deploy/auto-deploy.sh"
+cp "$REPO/deploy/aom-deploy.service" /etc/systemd/system/aom-deploy.service
+cp "$REPO/deploy/aom-deploy.timer"   /etc/systemd/system/aom-deploy.timer
+systemctl daemon-reload
+systemctl enable --now aom-deploy.timer
+
+echo "Timer installed. Running an initial deploy now..."
+"$REPO/deploy/auto-deploy.sh"
+
+echo
+systemctl list-timers aom-deploy.timer --no-pager || true
+echo
+echo "Done. Future pushes to main go live within ~2 minutes."
+echo "  Watch deploys:  journalctl -u aom-deploy.service -f"
