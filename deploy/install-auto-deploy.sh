@@ -17,7 +17,9 @@ cp "$REPO/deploy/aom-deploy.timer"   /etc/systemd/system/aom-deploy.timer
 systemctl daemon-reload
 systemctl enable --now aom-deploy.timer
 
-echo "Timer installed. Running an initial deploy now..."
+echo "Timer installed. Applying current code and restarting once..."
+chown -R www-data:www-data "$REPO"
+systemctl restart aom
 "$REPO/deploy/auto-deploy.sh"
 
 echo
