@@ -8,7 +8,9 @@ set -euo pipefail
 
 REPO="/var/www/action-outreach-ministry"
 
-# Allow root's git to operate on the www-data-owned repo without a "dubious ownership" error.
+# Allow git to operate on the www-data-owned repo without a "dubious ownership" error.
+# Use --system so it applies even under systemd (which runs services with no HOME/user gitconfig).
+git config --system --add safe.directory "$REPO" || true
 git config --global --add safe.directory "$REPO" || true
 
 chmod +x "$REPO/deploy/auto-deploy.sh"
