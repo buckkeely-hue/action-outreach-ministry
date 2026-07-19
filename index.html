@@ -629,6 +629,14 @@
             <input type="text" id="ev-edit-meta" class="custom-input" placeholder="9:00 AM · Location · Free">
             <label class="admin-label" style="margin-top:8px;">Description</label>
             <textarea id="ev-edit-text" class="custom-input" rows="3"></textarea>
+            <label class="admin-label" style="margin-top:8px;">Event Image</label>
+            <input type="hidden" id="ev-edit-image">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <input type="file" id="ev-image-input" accept="image/*" class="custom-input" style="flex:1;min-width:180px;">
+              <button type="button" class="form-btn" onclick="uploadEventImage()">Upload</button>
+            </div>
+            <div id="ev-image-msg" style="font-size:12px;margin-top:4px;"></div>
+            <div id="ev-image-preview" style="margin-top:6px;"></div>
             <div class="admin-edit-actions">
               <button class="form-btn" onclick="saveEvent()">Save</button>
               <button class="form-btn admin-cancel-btn" onclick="document.getElementById('admin-event-edit').style.display='none'">Cancel</button>

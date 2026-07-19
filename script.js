@@ -232,6 +232,7 @@ function renderEvents() {
     var past = _eventIsPast(e);
     return '<div class="event-card' + (past ? ' event-past' : '') + '">' +
       (past ? '<div class="event-past-badge">Past Event</div>' : '') +
+      (e.image ? '<img class="event-image" src="' + escHtml(e.image) + '" alt="' + escHtml(e.title) + '">' : '') +
       '<div class="event-date-box"><span class="event-month">' + escHtml(e.month) + '</span><span class="event-day">' + escHtml(e.day) + '</span></div>' +
       '<div class="event-info"><h3>' + escHtml(e.title) + '</h3><p class="event-meta">' + escHtml(e.meta) + '</p><p>' + escHtml(e.text) + '</p></div>' +
       '</div>';
@@ -1439,7 +1440,9 @@ function renderAdminEvents() {
   if (!events.length) { wrap.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No events yet.</p>'; return; }
   wrap.innerHTML = events.map(function(e, i) {
     return '<div class="admin-item">' +
-      '<div class="admin-item-preview"><strong>' + escHtml(e.month) + ' ' + escHtml(e.day) + '</strong> — ' + escHtml(e.title) + '</div>' +
+      '<div class="admin-item-preview">' +
+        (e.image ? '<img src="' + escHtml(e.image) + '" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:5px;vertical-align:middle;margin-right:8px;">' : '') +
+        '<strong>' + escHtml(e.month) + ' ' + escHtml(e.day) + '</strong> — ' + escHtml(e.title) + '</div>' +
       '<div class="admin-item-actions">' +
       '<button class="admin-item-btn" onclick="editEvent(' + i + ')">Edit</button>' +
       '<button class="admin-item-btn del" onclick="deleteEvent(' + i + ')">Delete</button>' +
@@ -1455,12 +1458,55 @@ function editEvent(idx) {
   document.getElementById('ev-edit-title').value = e.title;
   document.getElementById('ev-edit-meta').value  = e.meta;
   document.getElementById('ev-edit-text').value  = e.text;
+  document.getElementById('ev-edit-image').value = e.image || '';
+  _renderEventImagePreview(e.image || '');
+  document.getElementById('ev-image-msg').textContent = '';
+  document.getElementById('ev-image-input').value = '';
   document.getElementById('admin-event-edit').style.display = 'block';
 }
 function newEvent() {
   document.getElementById('ev-edit-idx').value = -1;
-  ['ev-edit-month','ev-edit-day','ev-edit-title','ev-edit-meta','ev-edit-text'].forEach(function(id) { document.getElementById(id).value = ''; });
+  ['ev-edit-month','ev-edit-day','ev-edit-title','ev-edit-meta','ev-edit-text','ev-edit-image'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('ev-image-input').value = '';
+  document.getElementById('ev-image-msg').textContent = '';
+  _renderEventImagePreview('');
   document.getElementById('admin-event-edit').style.display = 'block';
+}
+function _renderEventImagePreview(url) {
+  var box = document.getElementById('ev-image-preview');
+  if (!box) return;
+  box.innerHTML = url
+    ? '<img src="' + escHtml(url) + '" alt="Event image" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);">' +
+      '<button type="button" class="admin-item-btn del" style="margin-left:8px;vertical-align:top;" onclick="removeEventImage()">Remove</button>'
+    : '';
+}
+function removeEventImage() {
+  document.getElementById('ev-edit-image').value = '';
+  _renderEventImagePreview('');
+}
+function uploadEventImage() {
+  var inp = document.getElementById('ev-image-input');
+  var msg = document.getElementById('ev-image-msg');
+  if (!inp || !inp.files.length) { msg.textContent = 'Choose an image first.'; msg.style.color = '#f87171'; return; }
+  msg.textContent = 'Uploading…'; msg.style.color = 'rgba(255,255,255,0.6)';
+  var fd = new FormData();
+  fd.append('file', inp.files[0]);
+  fetch('/api/admin/upload-photo', {method:'POST', body: fd})
+    .then(function(r) {
+      if (!r.ok) return r.text().then(function(t) { return {ok:false, error: r.status + ' ' + t}; });
+      return r.json();
+    })
+    .then(function(d) {
+      if (d.ok && d.url) {
+        document.getElementById('ev-edit-image').value = d.url;
+        _renderEventImagePreview(d.url);
+        msg.textContent = 'Image uploaded.'; msg.style.color = '#86efac';
+        inp.value = '';
+      } else {
+        msg.textContent = 'Error: ' + (d.error || 'upload failed'); msg.style.color = '#f87171';
+      }
+    })
+    .catch(function(e) { msg.textContent = 'Error: ' + e.message; msg.style.color = '#f87171'; });
 }
 function saveEvent() {
   var idx  = parseInt(document.getElementById('ev-edit-idx').value);
@@ -1469,7 +1515,8 @@ function saveEvent() {
     day:   document.getElementById('ev-edit-day').value.trim(),
     title: document.getElementById('ev-edit-title').value.trim(),
     meta:  document.getElementById('ev-edit-meta').value.trim(),
-    text:  document.getElementById('ev-edit-text').value.trim()
+    text:  document.getElementById('ev-edit-text').value.trim(),
+    image: document.getElementById('ev-edit-image').value.trim()
   };
   if (!item.title) return;
   var events = (CONTENT.events || []).slice();
