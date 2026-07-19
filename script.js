@@ -1478,8 +1478,10 @@ function _renderEventImagePreview(url) {
   var box = document.getElementById('ev-image-preview');
   if (!box) return;
   box.innerHTML = url
-    ? '<img src="' + escHtml(url) + '" alt="Event image" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);">' +
-      '<button type="button" class="admin-item-btn del" style="margin-left:8px;vertical-align:top;" onclick="removeEventImage()">Remove</button>'
+    ? '<div class="ev-image-frame">' +
+        '<img src="' + escHtml(url) + '" alt="Event image" class="ev-image-thumb">' +
+        '<button type="button" class="ev-image-remove" onclick="removeEventImage()" title="Remove image">✕</button>' +
+      '</div>'
     : '';
 }
 function removeEventImage() {
