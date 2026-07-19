@@ -617,7 +617,8 @@
         <div id="admin-tab-events" class="admin-tab-body" style="display:none;">
           <div id="admin-events-list"></div>
           <button class="form-btn" onclick="newEvent()" style="margin-top:12px;">+ Add Event</button>
-          <div id="admin-event-edit" style="display:none;margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
+          <div id="admin-event-edit" class="admin-edit-card" style="display:none;">
+            <div class="admin-card-title" id="ev-edit-title-head">Add Event</div>
             <input type="hidden" id="ev-edit-idx">
             <div class="admin-date-row">
               <div><label class="admin-label">Month</label><input type="text" id="ev-edit-month" class="custom-input" placeholder="MAY"></div>

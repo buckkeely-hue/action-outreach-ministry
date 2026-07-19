@@ -1462,6 +1462,7 @@ function editEvent(idx) {
   _renderEventImagePreview(e.image || '');
   document.getElementById('ev-image-msg').textContent = '';
   document.getElementById('ev-image-input').value = '';
+  document.getElementById('ev-edit-title-head').textContent = 'Edit Event';
   document.getElementById('admin-event-edit').style.display = 'block';
 }
 function newEvent() {
@@ -1470,6 +1471,7 @@ function newEvent() {
   document.getElementById('ev-image-input').value = '';
   document.getElementById('ev-image-msg').textContent = '';
   _renderEventImagePreview('');
+  document.getElementById('ev-edit-title-head').textContent = 'Add Event';
   document.getElementById('admin-event-edit').style.display = 'block';
 }
 function _renderEventImagePreview(url) {
