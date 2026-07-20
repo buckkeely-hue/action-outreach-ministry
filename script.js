@@ -1389,12 +1389,14 @@ function editTestimony(idx) {
   document.getElementById('t-edit-idx').value   = idx;
   document.getElementById('t-edit-quote').value  = t.quote;
   document.getElementById('t-edit-author').value = t.author;
+  document.getElementById('t-edit-title-head').textContent = 'Edit Testimony';
   document.getElementById('admin-testimony-edit').style.display = 'block';
 }
 function newTestimony() {
   document.getElementById('t-edit-idx').value   = -1;
   document.getElementById('t-edit-quote').value  = '';
   document.getElementById('t-edit-author').value = '';
+  document.getElementById('t-edit-title-head').textContent = 'Add Testimony';
   document.getElementById('admin-testimony-edit').style.display = 'block';
 }
 function saveTestimony() {
@@ -1571,6 +1573,7 @@ function editPrayer(idx) {
   document.getElementById('pr-edit-text').value   = p.text;
   document.getElementById('pr-edit-meta').value   = p.meta;
   document.getElementById('pr-edit-urgent').checked = p.urgent;
+  document.getElementById('pr-edit-title-head').textContent = 'Edit Prayer Request';
   document.getElementById('admin-prayer-edit').style.display = 'block';
 }
 function newPrayer() {
@@ -1578,6 +1581,7 @@ function newPrayer() {
   document.getElementById('pr-edit-text').value      = '';
   document.getElementById('pr-edit-meta').value      = '';
   document.getElementById('pr-edit-urgent').checked  = false;
+  document.getElementById('pr-edit-title-head').textContent = 'Add Prayer Request';
   document.getElementById('admin-prayer-edit').style.display = 'block';
 }
 function savePrayer() {

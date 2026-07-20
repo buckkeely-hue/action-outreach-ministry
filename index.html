@@ -600,7 +600,8 @@
           <div class="admin-section-head" style="margin-top:16px;">✓ Published</div>
           <div id="admin-testimonies-list"></div>
           <button class="form-btn" onclick="newTestimony()" style="margin-top:12px;">+ Add Testimony</button>
-          <div id="admin-testimony-edit" style="display:none;margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
+          <div id="admin-testimony-edit" class="admin-edit-card" style="display:none;">
+            <div class="admin-card-title" id="t-edit-title-head">Add Testimony</div>
             <input type="hidden" id="t-edit-idx">
             <label class="admin-label">Quote (no quotation marks needed)</label>
             <textarea id="t-edit-quote" class="custom-input" rows="3"></textarea>
@@ -652,7 +653,8 @@
           <div class="admin-section-head" style="margin-top:16px;">✓ Published</div>
           <div id="admin-prayers-list"></div>
           <button class="form-btn" onclick="newPrayer()" style="margin-top:12px;">+ Add Prayer Request</button>
-          <div id="admin-prayer-edit" style="display:none;margin-top:14px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
+          <div id="admin-prayer-edit" class="admin-edit-card" style="display:none;">
+            <div class="admin-card-title" id="pr-edit-title-head">Add Prayer Request</div>
             <input type="hidden" id="pr-edit-idx">
             <label class="admin-label">Prayer Request</label>
             <textarea id="pr-edit-text" class="custom-input" rows="3"></textarea>
