@@ -783,6 +783,20 @@ class AOMHandler(BaseHTTPRequestHandler):
 
         data = file_path.read_bytes()
         ext  = file_path.suffix.lower()
+        # Cache-bust versioned asset links so CSS/JS changes go live immediately, even
+        # behind Cloudflare's edge cache — a changed ?v= is a fresh URL (and CF bypasses
+        # cache when a query string is present). Version = the file's modification time,
+        # which advances on every deploy.
+        if ext == '.html':
+            def _ver(n):
+                try:
+                    return str(int((BASE_DIR / n).stat().st_mtime))
+                except Exception:
+                    return '1'
+            html = data.decode('utf-8', 'replace')
+            html = html.replace('href="styles.css"', 'href="styles.css?v=' + _ver('styles.css') + '"')
+            html = html.replace('src="script.js"', 'src="script.js?v=' + _ver('script.js') + '"')
+            data = html.encode('utf-8')
         mime = MIME_TYPES.get(ext, 'application/octet-stream')
         self.send_response(200)
         self.send_header('Content-Type', mime)
