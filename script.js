@@ -257,7 +257,9 @@ function renderPrayers() {
 // ---- Tab Navigation ----
 function switchTab(id) {
   document.querySelectorAll('.nav-tab').forEach(function(t) {
-    t.classList.toggle('active', t.dataset.tab === id);
+    var on = t.dataset.tab === id;
+    t.classList.toggle('active', on);
+    if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
   });
   document.querySelectorAll('.tab-section').forEach(function(s) {
     s.classList.toggle('active', s.id === 'tab-' + id);

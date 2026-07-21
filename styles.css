@@ -502,18 +502,41 @@ body {
 
 .modal-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 14px;
+  right: 14px;
   background: rgba(0,0,0,0.06);
   border: none;
   border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ── Accessibility: visible keyboard focus (only for keyboard users, not mouse) ── */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+label:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* On the dark navy header/panel, use the lighter gold so the ring stands out */
+.site-nav .nav-tab:focus-visible,
+.admin-modal-box button:focus-visible,
+.admin-modal-box input:focus-visible,
+.admin-modal-box textarea:focus-visible,
+.contact-info-btn-header:focus-visible,
+.donate-btn-header:focus-visible,
+.admin-link-header:focus-visible {
+  outline-color: var(--gold-light);
 }
 
 .modal-logo {
