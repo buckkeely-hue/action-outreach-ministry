@@ -1340,9 +1340,13 @@ textarea.custom-input {
 
 /* ---- Responsive ---- */
 @media (max-width: 600px) {
-  .header-inner { padding: 10px 16px; }
+  .header-inner { padding: 10px 16px; flex-wrap: wrap; gap: 8px 6px; }
   .logo-title { font-size: 16px; }
   .logo-sub { display: none; }
+  /* Compact the header action buttons so logo + Contact/Give/Admin fit phones
+     (they wrap under the logo if the screen is very narrow) */
+  .contact-info-btn-header, .admin-link-header { padding: 7px 11px; font-size: 12px; }
+  .donate-btn-header { padding: 8px 15px; font-size: 13px; }
   .site-nav { padding: 0 8px; }
   .nav-tab { padding: 10px 12px; font-size: 13px; }
   .site-main { padding: 0 16px 40px; }
