@@ -72,6 +72,7 @@ MIME_TYPES = {
     '.ico':  'image/x-icon',
     '.svg':  'image/svg+xml',
     '.txt':  'text/plain',
+    '.xml':  'application/xml',
     '.mp3':  'audio/mpeg',
     '.pdf':  'application/pdf',
     '.doc':  'application/msword',
@@ -729,6 +730,31 @@ class AOMHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     # ── GET ───────────────────────────────────────────────────────────────────
+
+    def do_HEAD(self):
+        """HEAD support (crawlers, uptime monitors, link-preview bots) — headers only,
+        no body. Without this, BaseHTTPRequestHandler returns 501 for every HEAD."""
+        path = urlparse(self.path).path
+        if path.startswith('/api/'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            return
+        file_path = (BASE_DIR / path.lstrip('/')).resolve()
+        try:
+            file_path.relative_to(BASE_DIR.resolve())
+        except ValueError:
+            file_path = BASE_DIR / 'index.html'
+        if file_path.is_dir():
+            file_path = file_path / 'index.html'
+        if not file_path.exists() or not file_path.is_file():
+            file_path = BASE_DIR / 'index.html'
+        ext = file_path.suffix.lower()
+        self.send_response(200)
+        self.send_header('Content-Type', MIME_TYPES.get(ext, 'application/octet-stream'))
+        if ext in ('.html', '.js', '.css'):
+            self._security_headers()
+        self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path.rstrip('/') or '/'
