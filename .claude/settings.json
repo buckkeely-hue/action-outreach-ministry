@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://localhost:8080/*)",
+      "Bash(curl -s http://localhost:8080/*)",
+      "Bash(curl -s \"https://actionoutreachministry.com*)",
+      "Bash(curl -s \"https://buckkeely.com*)",
+      "Bash(ask smapi get-skill-status *)",
+      "Bash(ask smapi get-skill-simulation *)",
+      "Bash(ask smapi get-interaction-model *)",
+      "Bash(ask smapi get-skill-manifest *)",
+      "Bash(ask smapi list-skills-for-vendor *)",
+      "mcp__claude_ai_Gmail__search_threads"
+    ]
+  }
+}
