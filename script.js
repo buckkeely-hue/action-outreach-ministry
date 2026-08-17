@@ -280,7 +280,7 @@ function openNewsletter() {
   if (issueEl) issueEl.textContent = nl.issue || '';
   if (dateEl)  dateEl.textContent  = nl.date  || '';
   var bodyEl = document.getElementById('nl-body');
-  if (bodyEl) bodyEl.innerHTML = nl.body || '<p>Newsletter content coming soon.</p>';
+  if (bodyEl) bodyEl.innerHTML = nl.body || '';
   renderNewsletterAttachments(nl.files || []);
   document.getElementById('newsletter-overlay').style.display = 'flex';
 }
